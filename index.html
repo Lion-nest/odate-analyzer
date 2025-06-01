@@ -1,4 +1,30 @@
-<!DOCTYPE html>
+.unit {
+            font-size: 14px;
+            color: #888;
+            margin-left: 2px;
+        }
+        
+        .result-group:not(.jackpot) .unit {
+            font-size: 12px;
+        }
+        
+        .r-label-10r {
+            font-size: 12px;
+            color: #a04040;
+            margin-right: 4px;
+        }
+        
+        .r-label-5r {
+            font-size: 12px;
+            color: #a06030;
+            margin-right: 4px;
+        }
+        
+        .r-label-3r {
+            font-size: 12px;
+            color: #4080a0;
+            margin-right: 4px;
+        }<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -418,10 +444,6 @@
                         <label>3R</label>
                         <input type="number" id="inputL" inputmode="numeric" pattern="[0-9]*">
                     </div>
-                    <div class="input-item">
-                        <label>2開放目</label>
-                        <input type="number" id="inputM" inputmode="numeric" pattern="[0-9]*">
-                    </div>
                 </div>
             </div>
             
@@ -443,7 +465,10 @@
                 <div class="result-row">
                     <div class="result-item">
                         <div class="result-label">大当</div>
-                        <div class="result-value large" id="jackpotCount">-</div>
+                        <div class="result-value large">
+                            <span id="jackpotCount">-</span>
+                            <span class="unit">回</span>
+                        </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">大当り確率</div>
@@ -454,7 +479,9 @@
                     <div class="result-item">
                         <div class="result-label">R振分</div>
                         <div class="result-value r-dist">
-                            10R <span id="jCount">-</span> 5R <span id="kCount">-</span> 3R <span id="lCount">-</span>
+                            <span class="r-label-10r">10R</span><span id="jCount">-</span>
+                            <span class="r-label-5r">5R</span><span id="kCount">-</span>
+                            <span class="r-label-3r">3R</span><span id="lCount">-</span>
                         </div>
                     </div>
                     <div class="result-item">
@@ -468,21 +495,33 @@
                 <div class="result-row">
                     <div class="result-item">
                         <div class="result-label">総ナキ数</div>
-                        <div class="result-value" id="totalNaki">-</div>
+                        <div class="result-value">
+                            <span id="totalNaki">-</span>
+                            <span class="unit">回</span>
+                        </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">ナキ/千</div>
-                        <div class="result-value" id="nakiPer">-</div>
+                        <div class="result-value">
+                            <span id="nakiPer">-</span>
+                            <span class="unit">回/千</span>
+                        </div>
                     </div>
                 </div>
                 <div class="result-row">
                     <div class="result-item">
-                        <div class="result-label">総拾い回数</div>
-                        <div class="result-value" id="totalPickup">-</div>
+                        <div class="result-label">総拾い個数</div>
+                        <div class="result-value">
+                            <span id="totalPickup">-</span>
+                            <span class="unit">個</span>
+                        </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">拾い/千</div>
-                        <div class="result-value" id="pickupPer">-</div>
+                        <div class="result-value">
+                            <span id="pickupPer">-</span>
+                            <span class="unit">個/千</span>
+                        </div>
                     </div>
                 </div>
                 <div class="result-row">
@@ -523,26 +562,41 @@
             <div class="result-group hiki">
                 <div class="hiki-total">
                     <div class="result-label">期待差玉からのヒキの過多</div>
-                    <div class="result-value" id="totalHiki">-</div>
+                    <div class="result-value">
+                        <span id="totalHiki">-</span>
+                        <span class="unit">個</span>
+                    </div>
                 </div>
                 <div class="result-row">
                     <div class="result-item">
                         <div class="result-label">Rのヒキ</div>
-                        <div class="result-value" id="rHiki">-</div>
+                        <div class="result-value">
+                            <span id="rHiki">-</span>
+                            <span class="unit">個</span>
+                        </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">SPルートのヒキ</div>
-                        <div class="result-value" id="spHiki">-</div>
+                        <div class="result-value">
+                            <span id="spHiki">-</span>
+                            <span class="unit">個</span>
+                        </div>
                     </div>
                 </div>
                 <div class="result-row">
                     <div class="result-item">
                         <div class="result-label">通-リプレイのヒキ</div>
-                        <div class="result-value" id="repHiki">-</div>
+                        <div class="result-value">
+                            <span id="repHiki">-</span>
+                            <span class="unit">個</span>
+                        </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">通常ルートのヒキ</div>
-                        <div class="result-value" id="normHiki">-</div>
+                        <div class="result-value">
+                            <span id="normHiki">-</span>
+                            <span class="unit">個</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -725,8 +779,7 @@
                 I: 'inputI',  // 拾い→蹴り
                 J: 'inputJ',  // 10R
                 K: 'inputK',  // 5R
-                L: 'inputL',  // 3R
-                M: 'inputM'   // 2開放目
+                L: 'inputL'   // 3R
             };
             
             // 各フィールドに値を設定
@@ -933,8 +986,7 @@
                 I: parseInt(document.getElementById('inputI').value) || 0,
                 J: parseInt(document.getElementById('inputJ').value) || 0,
                 K: parseInt(document.getElementById('inputK').value) || 0,
-                L: parseInt(document.getElementById('inputL').value) || 0,
-                M: parseInt(document.getElementById('inputM').value) || 0
+                L: parseInt(document.getElementById('inputL').value) || 0
             };
             
             // 計算
@@ -971,7 +1023,11 @@
             
             const formatHiki = (val) => {
                 const rounded = Math.round(val);
-                return (rounded >= 0 ? '+' : '') + rounded;
+                const sign = rounded >= 0 ? '+' : '';
+                const absVal = Math.abs(rounded);
+                // 3桁ごとにカンマを追加
+                const formatted = absVal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                return sign + formatted;
             };
             
             document.getElementById('totalHiki').textContent = formatHiki(totalHiki);
