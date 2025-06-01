@@ -141,8 +141,7 @@ function extractStructuredData(detections, fullTextAnnotation) {
     '蹴り': { field: 'I', found: false, index: -1 },
     '10R': { field: 'J', found: false, index: -1 },
     '5R': { field: 'K', found: false, index: -1 },
-    '3R': { field: 'L', found: false, index: -1 },
-    '2開放目': { field: 'M', found: false, index: -1 }
+    '3R': { field: 'L', found: false, index: -1 }
   };
 
   // キーワードの位置を検索
@@ -191,14 +190,7 @@ function extractStructuredData(detections, fullTextAnnotation) {
     }
   }
 
-  // 2開放目（Mの値）- 「2穴」の文字の前方向に6個目の数値
-  const nianaIndex = normalizedText.lastIndexOf('2穴');
-  if (nianaIndex !== -1) {
-    const numbersBeforeNiana = allNumbers.filter(n => n.index < nianaIndex);
-    if (numbersBeforeNiana.length >= 6) {
-      extractedValues.M = numbersBeforeNiana[numbersBeforeNiana.length - 6].value;
-    }
-  }
+  // 2開放目（Mの値）の処理を削除
 
   // 数値範囲によるバリデーション
   const ranges = {
@@ -214,8 +206,7 @@ function extractStructuredData(detections, fullTextAnnotation) {
     I: [0, 800],
     J: [0, 100],
     K: [0, 100],
-    L: [0, 100],
-    M: [0, 100]
+    L: [0, 100]
   };
 
   // 範囲外の値を除外
