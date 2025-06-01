@@ -624,12 +624,21 @@
                 console.log('OCR結果:', text);
                 debugLog('OCR結果: ' + text);
                 
-                // 位置情報を含む詳細な解析
-                if (result.fullTextAnnotation) {
-                    processDetailedOCR(result.fullTextAnnotation);
+                // 構造化データがある場合は優先的に使用
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    debugLog('構造化データを使用します');
+                    processStructuredData(result.structuredData);
                 } else {
-                    // 基本的なテキスト処理
-                    processBasicOCR(text);
+                    // 従来の処理方法にフォールバック
+                    debugLog('従来の処理方法を使用します');
+                    
+                    // 位置情報を含む詳細な解析
+                    if (result.fullTextAnnotation) {
+                        processDetailedOCR(result.fullTextAnnotation);
+                    } else {
+                        // 基本的なテキスト処理
+                        processBasicOCR(text);
+                    }
                 }
                 
                 ocrStatus.textContent = '✅ 認識完了 - 必要に応じて数値を修正してください';
@@ -682,6 +691,7 @@
             });
             
             debugLog('抽出された数値（位置情報付き）: ' + JSON.stringify(allNumbers));
+            // 従来の処理も実行
             assignNumbersToInputs(allNumbers);
         }
         
@@ -689,6 +699,53 @@
         function processBasicOCR(text) {
             const allNumbers = extractNumbersByPosition(text);
             assignNumbersToInputs(allNumbers);
+        }
+        
+        // 構造化データを使った高精度な値の割り当て
+        function processStructuredData(structuredData) {
+            if (!structuredData || !structuredData.extractedValues) {
+                debugLog('構造化データが見つかりません');
+                return;
+            }
+            
+            const values = structuredData.extractedValues;
+            debugLog('抽出された構造化データ: ' + JSON.stringify(values));
+            
+            // フィールドマッピング
+            const fieldMapping = {
+                X: 'inputX',  // 対象ゲーム数
+                A: 'inputA',  // 打込
+                B: 'inputB',  // 2穴
+                C: 'inputC',  // リプレイ
+                D: 'inputD',  // リプ→V
+                E: 'inputE',  // 羽根拾
+                F: 'inputF',  // V入賞
+                G: 'inputG',  // SP
+                H: 'inputH',  // SP→V
+                I: 'inputI',  // 拾い→蹴り
+                J: 'inputJ',  // 10R
+                K: 'inputK',  // 5R
+                L: 'inputL',  // 3R
+                M: 'inputM'   // 2開放目
+            };
+            
+            // 各フィールドに値を設定
+            let successCount = 0;
+            for (const [field, inputId] of Object.entries(fieldMapping)) {
+                if (values[field] !== undefined) {
+                    const element = document.getElementById(inputId);
+                    if (element) {
+                        element.value = values[field];
+                        successCount++;
+                        debugLog(`${field} (${inputId}) に ${values[field]} を設定`);
+                    }
+                }
+            }
+            
+            debugLog(`${successCount}個のフィールドに値を設定しました`);
+            
+            // 検証と調整
+            validateAndAdjust();
         }
         
         // 位置ベースで数値を抽出
@@ -854,9 +911,11 @@
         // デバッグログ
         function debugLog(message) {
             console.log(message);
-            // デバッグモードが必要な場合はコメントを外す
-            // debugMode.innerHTML += message + '<br>';
-            // debugMode.className = 'debug-mode show';
+            // デバッグモードを有効にする場合はコメントを外す
+            if (window.location.hash === '#debug') {
+                debugMode.innerHTML += message + '<br>';
+                debugMode.className = 'debug-mode show';
+            }
         }
         
         function calculate() {
