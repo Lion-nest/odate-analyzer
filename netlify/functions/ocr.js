@@ -98,118 +98,142 @@ exports.handler = async (event, context) => {
 
 // 構造化データを抽出する関数
 function extractStructuredData(detections, fullTextAnnotation) {
-  if (!detections || detections.length === 0) return {};
+  if (!fullTextAnnotation || !fullTextAnnotation.text) return {};
 
-  // 画像の寸法を取得（最初の検出結果から推定）
-  const imageBounds = detections[0].boundingPoly?.vertices || [];
-  const imageWidth = Math.max(...imageBounds.map(v => v.x || 0));
-  const imageHeight = Math.max(...imageBounds.map(v => v.y || 0));
+  const fullText = fullTextAnnotation.text;
+  console.log('Full OCR text:', fullText);
 
-  // グリッドの定義（5行4列）
-  const gridRows = 5;
-  const gridCols = 4;
-  const cellHeight = imageHeight / (gridRows + 2); // 上下のマージンを考慮
-  const cellWidth = imageWidth / gridCols;
+  // 改行や余分な空白を正規化
+  const normalizedText = fullText.replace(/\s+/g, ' ').trim();
+  console.log('Normalized text:', normalizedText);
 
-  // 各検出テキストを座標に基づいて分類
-  const gridData = {};
-  
-  // スキップする要素（最初の要素は全体テキスト）
-  for (let i = 1; i < detections.length; i++) {
-    const detection = detections[i];
-    const text = detection.description;
-    const vertices = detection.boundingPoly?.vertices || [];
+  const extractedValues = {};
+
+  // 各フィールドの抽出パターン
+  // 対象ゲーム数の抽出
+  const targetGameMatch = normalizedText.match(/対象ゲーム数\s*(\d+)/);
+  if (targetGameMatch) {
+    extractedValues.X = parseInt(targetGameMatch[1]);
+  }
+
+  // 数値の配列を作成（順序を保持）
+  const allNumbers = [];
+  const numberMatches = normalizedText.matchAll(/\d+/g);
+  for (const match of numberMatches) {
+    allNumbers.push({
+      value: parseInt(match[0]),
+      index: match.index,
+      text: match[0]
+    });
+  }
+  console.log('All numbers found:', allNumbers);
+
+  // キーワードとその位置を探す
+  const keywords = {
+    '打込': { field: 'A', found: false, index: -1 },
+    '2穴': { field: 'B', found: false, index: -1 },
+    'リプレイ': { field: 'C', found: false, index: -1 },
+    'リプ': { field: 'D', found: false, index: -1 }, // リプ→V
+    '羽根拾': { field: 'E', found: false, index: -1 },
+    'V入賞': { field: 'F', found: false, index: -1 },
+    'SP→V': { field: 'H', found: false, index: -1 },
+    'SP': { field: 'G', found: false, index: -1 }, // SP→Vより後に検索
+    '蹴り': { field: 'I', found: false, index: -1 },
+    '10R': { field: 'J', found: false, index: -1 },
+    '5R': { field: 'K', found: false, index: -1 },
+    '3R': { field: 'L', found: false, index: -1 },
+    '2開放目': { field: 'M', found: false, index: -1 }
+  };
+
+  // キーワードの位置を検索
+  for (const [keyword, info] of Object.entries(keywords)) {
+    const keywordIndex = normalizedText.indexOf(keyword);
+    if (keywordIndex !== -1) {
+      info.found = true;
+      info.index = keywordIndex;
+    }
+  }
+
+  // 特別な処理：対象ゲーム数の後の数値群（A, B, C, D）
+  if (targetGameMatch && targetGameMatch.index !== undefined) {
+    const afterTargetIndex = targetGameMatch.index + targetGameMatch[0].length;
+    const numbersAfterTarget = allNumbers.filter(n => n.index > afterTargetIndex).slice(0, 4);
     
-    if (vertices.length === 0) continue;
-    
-    // 中心座標を計算
-    const centerX = vertices.reduce((sum, v) => sum + (v.x || 0), 0) / vertices.length;
-    const centerY = vertices.reduce((sum, v) => sum + (v.y || 0), 0) / vertices.length;
-    
-    // どのセルに属するか判定
-    const col = Math.floor(centerX / cellWidth);
-    const row = Math.floor((centerY - cellHeight * 0.5) / cellHeight); // 上部マージンを考慮
-    
-    // 数値のみを抽出
-    const numMatch = text.match(/\d+/);
-    if (numMatch) {
-      const value = parseInt(numMatch[0]);
-      const key = `${row}_${col}`;
-      
-      // 同じセルに複数の数値がある場合は、より大きい数値を優先
-      if (!gridData[key] || value > gridData[key].value) {
-        gridData[key] = {
-          value: value,
-          text: text,
-          row: row,
-          col: col,
-          x: centerX,
-          y: centerY
-        };
+    if (numbersAfterTarget.length >= 4) {
+      extractedValues.A = numbersAfterTarget[0].value; // 打込
+      extractedValues.B = numbersAfterTarget[1].value; // 2穴
+      extractedValues.C = numbersAfterTarget[2].value; // リプレイ
+      extractedValues.D = numbersAfterTarget[3].value; // リプ→V
+    }
+  }
+
+  // 羽根拾の前の数値群（E, F, G, H）
+  const haneIndex = normalizedText.indexOf('羽根拾');
+  if (haneIndex !== -1) {
+    const numbersBeforeHane = allNumbers.filter(n => n.index < haneIndex).slice(-4);
+    if (numbersBeforeHane.length >= 4) {
+      extractedValues.E = numbersBeforeHane[0].value; // 羽根拾
+      extractedValues.F = numbersBeforeHane[1].value; // V入賞
+      extractedValues.G = numbersBeforeHane[2].value; // SP
+      extractedValues.H = numbersBeforeHane[3].value; // SP→V
+    }
+  }
+
+  // 蹴りの前の数値群（I, J, K, L）
+  const keriIndex = normalizedText.indexOf('蹴り');
+  if (keriIndex !== -1) {
+    const numbersBeforeKeri = allNumbers.filter(n => n.index < keriIndex).slice(-4);
+    if (numbersBeforeKeri.length >= 4) {
+      extractedValues.I = numbersBeforeKeri[0].value; // 拾い→蹴り
+      extractedValues.J = numbersBeforeKeri[1].value; // 10R
+      extractedValues.K = numbersBeforeKeri[2].value; // 5R
+      extractedValues.L = numbersBeforeKeri[3].value; // 3R
+    }
+  }
+
+  // 2開放目（Mの値）- 「2穴」の文字の前方向に6個目の数値
+  const nianaIndex = normalizedText.lastIndexOf('2穴');
+  if (nianaIndex !== -1) {
+    const numbersBeforeNiana = allNumbers.filter(n => n.index < nianaIndex);
+    if (numbersBeforeNiana.length >= 6) {
+      extractedValues.M = numbersBeforeNiana[numbersBeforeNiana.length - 6].value;
+    }
+  }
+
+  // 数値範囲によるバリデーション
+  const ranges = {
+    X: [0, 3000],
+    A: [0, 300],
+    B: [0, 150],
+    C: [0, 100],
+    D: [0, 100],
+    E: [0, 1000],
+    F: [0, 100],
+    G: [0, 100],
+    H: [0, 100],
+    I: [0, 800],
+    J: [0, 100],
+    K: [0, 100],
+    L: [0, 100],
+    M: [0, 100]
+  };
+
+  // 範囲外の値を除外
+  for (const [field, [min, max]] of Object.entries(ranges)) {
+    if (extractedValues[field] !== undefined) {
+      if (extractedValues[field] < min || extractedValues[field] > max) {
+        console.log(`Field ${field} value ${extractedValues[field]} is out of range [${min}, ${max}]`);
+        delete extractedValues[field];
       }
     }
   }
 
-  // 特別な処理：対象ゲーム数を探す
-  let targetGameCount = null;
-  
-  // fullTextAnnotationから「対象ゲーム数」の後の数字を探す
-  if (fullTextAnnotation && fullTextAnnotation.text) {
-    const targetMatch = fullTextAnnotation.text.match(/対象ゲーム数\s*(\d+)/);
-    if (targetMatch) {
-      targetGameCount = parseInt(targetMatch[1]);
-    }
-  }
-
-  // グリッドデータから構造化データを作成
-  const structuredResult = {
-    targetGameCount: targetGameCount,
-    gridData: gridData,
+  return {
+    extractedValues: extractedValues,
     debug: {
-      imageWidth: imageWidth,
-      imageHeight: imageHeight,
-      cellWidth: cellWidth,
-      cellHeight: cellHeight,
-      detectionCount: detections.length - 1
+      normalizedText: normalizedText.substring(0, 200) + '...',
+      numberCount: allNumbers.length,
+      extractedCount: Object.keys(extractedValues).length
     }
   };
-
-  // フィールドマッピングに基づいて値を抽出
-  const fieldMapping = {
-    X: { row: -1, col: -1, special: 'targetGameCount' }, // 特別処理
-    A: { row: 1, col: 0 }, // 打込
-    B: { row: 1, col: 1 }, // 2穴
-    C: { row: 1, col: 2 }, // リプレイ
-    D: { row: 1, col: 3 }, // リプ→V
-    E: { row: 2, col: 0 }, // 羽根拾
-    F: { row: 2, col: 1 }, // V入賞
-    G: { row: 2, col: 2 }, // SP
-    H: { row: 2, col: 3 }, // SP→V
-    I: { row: 3, col: 0 }, // 拾い→蹴り
-    J: { row: 3, col: 1 }, // 当大
-    K: { row: 3, col: 2 }, // 当中
-    L: { row: 3, col: 3 }, // 当小
-    M: { row: 4, col: 0 }  // 2穴二回目
-  };
-
-  const extractedValues = {};
-  
-  // 対象ゲーム数（特別処理）
-  if (targetGameCount !== null) {
-    extractedValues.X = targetGameCount;
-  }
-  
-  // その他のフィールド
-  for (const [field, position] of Object.entries(fieldMapping)) {
-    if (field === 'X') continue; // 既に処理済み
-    
-    const key = `${position.row}_${position.col}`;
-    if (gridData[key]) {
-      extractedValues[field] = gridData[key].value;
-    }
-  }
-
-  structuredResult.extractedValues = extractedValues;
-  
-  return structuredResult;
 }
