@@ -1,30 +1,4 @@
-.unit {
-            font-size: 14px;
-            color: #888;
-            margin-left: 2px;
-        }
-        
-        .result-group:not(.jackpot) .unit {
-            font-size: 12px;
-        }
-        
-        .r-label-10r {
-            font-size: 12px;
-            color: #a04040;
-            margin-right: 4px;
-        }
-        
-        .r-label-5r {
-            font-size: 12px;
-            color: #a06030;
-            margin-right: 4px;
-        }
-        
-        .r-label-3r {
-            font-size: 12px;
-            color: #4080a0;
-            margin-right: 4px;
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -173,17 +147,6 @@
             background: #1a1a1a;
         }
         
-        .input-single .input-item {
-            background: #1e1e1e;
-            padding: 8px;
-            border-radius: 6px;
-        }
-        
-        .input-single .input-item label {
-            color: #aaa;
-            font-size: 12px;
-        }
-        
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
@@ -309,26 +272,61 @@
             font-size: 22px;
         }
         
+        /* 単位のスタイル */
+        .unit {
+            font-size: 14px;
+            color: #888;
+            margin-left: 2px;
+            font-weight: normal;
+        }
+        
         .result-value.large .unit {
             font-size: 14px;
         }
         
-        .result-value.positive {
-            color: #4ade80;
+        .result-group:not(.jackpot) .unit {
+            font-size: 12px;
         }
         
-        .result-value.negative {
-            color: #f87171;
-        }
-        
+        /* R振分のスタイル */
         .r-dist {
             font-size: 14px;
         }
         
-        .r-dist span {
+        .r-dist .value {
             font-size: 18px;
             font-weight: bold;
-            margin: 0 2px;
+            margin: 0 4px;
+        }
+        
+        .r-label-10r {
+            font-size: 12px;
+            color: #a04040;
+            margin-right: 4px;
+            font-weight: normal;
+        }
+        
+        .r-label-5r {
+            font-size: 12px;
+            color: #a06030;
+            margin-right: 4px;
+            font-weight: normal;
+        }
+        
+        .r-label-3r {
+            font-size: 12px;
+            color: #4080a0;
+            margin-right: 4px;
+            font-weight: normal;
+        }
+        
+        /* ヒキの色 */
+        .positive {
+            color: #4ade80;
+        }
+        
+        .negative {
+            color: #f87171;
         }
         
         .hiki-total {
@@ -483,11 +481,11 @@
                     <div class="result-item">
                         <div class="result-label">R振分</div>
                         <div class="result-value r-dist">
-                            <span class="r-label-10r">10R</span><span id="jCount">-</span>
+                            <span class="r-label-10r">10R</span><span class="value" id="jCount">-</span>
                             <span style="margin: 0 8px;"></span>
-                            <span class="r-label-5r">5R</span><span id="kCount">-</span>
+                            <span class="r-label-5r">5R</span><span class="value" id="kCount">-</span>
                             <span style="margin: 0 8px;"></span>
-                            <span class="r-label-3r">3R</span><span id="lCount">-</span>
+                            <span class="r-label-3r">3R</span><span class="value" id="lCount">-</span>
                         </div>
                     </div>
                     <div class="result-item">
@@ -569,7 +567,7 @@
                 <div class="hiki-total">
                     <div class="result-label">期待差玉からのヒキの多寡</div>
                     <div class="result-value">
-                        <span id="totalHiki">-</span>
+                        <span id="totalHiki" class="hiki-value">-</span>
                         <span class="unit">個</span>
                     </div>
                 </div>
@@ -577,14 +575,14 @@
                     <div class="result-item">
                         <div class="result-label">Rのヒキ</div>
                         <div class="result-value">
-                            <span id="rHiki">-</span>
+                            <span id="rHiki" class="hiki-value">-</span>
                             <span class="unit">個</span>
                         </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">SPルートのヒキ</div>
                         <div class="result-value">
-                            <span id="spHiki">-</span>
+                            <span id="spHiki" class="hiki-value">-</span>
                             <span class="unit">個</span>
                         </div>
                     </div>
@@ -593,14 +591,14 @@
                     <div class="result-item">
                         <div class="result-label">通-リプレイのヒキ</div>
                         <div class="result-value">
-                            <span id="repHiki">-</span>
+                            <span id="repHiki" class="hiki-value">-</span>
                             <span class="unit">個</span>
                         </div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">通常ルートのヒキ</div>
                         <div class="result-value">
-                            <span id="normHiki">-</span>
+                            <span id="normHiki" class="hiki-value">-</span>
                             <span class="unit">個</span>
                         </div>
                     </div>
@@ -843,7 +841,7 @@
                 veryLarge: [],  // 300-1000 (E, I)
                 large: [],      // 100-300 (A)
                 medium: [],     // 50-100 (B)
-                small: [],      // 0-50 (C,D,F,G,H,J,K,L,M)
+                small: [],      // 0-50 (C,D,F,G,H,J,K,L)
             };
             
             sortedByValue.forEach(num => {
@@ -912,7 +910,7 @@
             }
             
             // 残りの小さい数値を順番に割り当て
-            const remainingInputs = ['C', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
+            const remainingInputs = ['C', 'D', 'F', 'G', 'H', 'J', 'K', 'L'];
             const usedValues = new Set([
                 parseInt(document.getElementById('inputX').value) || 0,
                 parseInt(document.getElementById('inputA').value) || 0,
@@ -999,7 +997,7 @@
             const jackpotCount = v.J + v.K + v.L;
             const avgRound = jackpotCount > 0 ? ((v.J * 9 + v.K * 4 + v.L * 2) / jackpotCount).toFixed(1) : '0';
             
-            // 結果表示
+            // 結果表示（単位はHTMLに含まれているので、数値のみを設定）
             document.getElementById('resultA').textContent = v.A;
             document.getElementById('jackpotCount').textContent = jackpotCount;
             document.getElementById('jackpotProb').textContent = jackpotCount > 0 ? '1/' + (v.X / jackpotCount).toFixed(1) : '-';
@@ -1036,20 +1034,18 @@
                 return sign + formatted;
             };
             
-            document.getElementById('totalHiki').textContent = formatHiki(totalHiki);
-            document.getElementById('totalHiki').className = totalHiki >= 0 ? 'result-value positive' : 'result-value negative';
+            // ヒキの値を設定（色のクラスも付与）
+            const setHikiValue = (elementId, value) => {
+                const element = document.getElementById(elementId);
+                element.textContent = formatHiki(value);
+                element.className = value >= 0 ? 'hiki-value positive' : 'hiki-value negative';
+            };
             
-            document.getElementById('rHiki').textContent = formatHiki(roundHiki);
-            document.getElementById('rHiki').className = roundHiki >= 0 ? 'result-value positive' : 'result-value negative';
-            
-            document.getElementById('spHiki').textContent = formatHiki(spHiki);
-            document.getElementById('spHiki').className = spHiki >= 0 ? 'result-value positive' : 'result-value negative';
-            
-            document.getElementById('repHiki').textContent = formatHiki(repHiki);
-            document.getElementById('repHiki').className = repHiki >= 0 ? 'result-value positive' : 'result-value negative';
-            
-            document.getElementById('normHiki').textContent = formatHiki(normHiki);
-            document.getElementById('normHiki').className = normHiki >= 0 ? 'result-value positive' : 'result-value negative';
+            setHikiValue('totalHiki', totalHiki);
+            setHikiValue('rHiki', roundHiki);
+            setHikiValue('spHiki', spHiki);
+            setHikiValue('repHiki', repHiki);
+            setHikiValue('normHiki', normHiki);
             
             resultSection.style.display = 'block';
             resultSection.scrollIntoView({ behavior: 'smooth' });
