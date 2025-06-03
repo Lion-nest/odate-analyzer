@@ -1,4 +1,132 @@
-<!DOCTYPE html>
+// 複数ファイルの処理
+        async function processMultipleFiles(files) {
+            ocrStatus.textContent = `${files.length}枚の画像を処理中...`;
+            ocrStatus.className = 'ocr-status show loading';
+            uploadBtn.disabled = true;
+            multiUploadBtn.disabled = true;
+            
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    ocrStatus.textContent = `処理中... (${i + 1}/${files.length})`;
+                    const data = await performOCRForMultiple(files[i]);
+                    if (data) {
+                        multipleData.push(data);
+                    }
+                }
+                
+                if (multipleData.length > 0) {
+                    // 打込が最大のデータを選択
+                    const maxData = multipleData.reduce((max, current) => 
+                        (current.A > max.A) ? current : max
+                    );
+                    
+                    // フィールドに値を設定
+                    setFieldValues(maxData);
+                    
+                    ocrStatus.textContent = `✅ ${multipleData.length}枚の処理完了 - 最大打込: ${maxData.A}`;
+                    ocrStatus.className = 'ocr-status show success';
+                }
+            } catch (error) {
+                console.error('複数ファイル処理エラー:', error);
+                ocrStatus.textContent = '❌ 処理エラー';
+                ocrStatus.className = 'ocr-status show error';
+            } finally {
+                uploadBtn.disabled = false;
+                multiUploadBtn.disabled = false;
+            }
+        }
+        
+        // 複数選択用のOCR処理
+        async function performOCRForMultiple(file) {
+            try {
+                const base64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                const response = await fetch('/.netlify/functions/ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // 構造化データから値を抽出
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    return result.structuredData.extractedValues;
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('OCRエラー:', error);
+                return null;
+            }
+        }
+        
+        // フィールドに値を設定
+        function setFieldValues(data) {
+            const fieldMapping = {
+                X: 'inputX',
+                A: 'inputA',
+                B: 'inputB',
+                C: 'inputC',
+                D: 'inputD',
+                E: 'inputE',
+                F: 'inputF',
+                G: 'inputG',
+                H: 'inputH',
+                I: 'inputI',
+                J: 'inputJ',
+                K: 'inputK',
+                L: 'inputL'
+            };
+            
+            for (const [field, inputId] of Object.entries(fieldMapping)) {
+                if (data[field] !== undefined) {
+                    const element = document.getElementById(inputId);
+                    if (element) {
+                        element.value = data[field];
+                    }
+                }
+            }
+        }        .graph-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .graph-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .graph-title {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 150px;
+        }<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -372,6 +500,7 @@
             display: block;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -379,7 +508,9 @@
         
         <div class="section">
             <button class="upload-btn" id="uploadBtn">📸 スクショを選択</button>
+            <button class="upload-btn" id="multiUploadBtn" style="background: #28a745; margin-bottom: 15px;">📸 スクショ連続選択</button>
             <input type="file" id="fileInput" accept="image/*">
+            <input type="file" id="multiFileInput" accept="image/*" multiple style="display: none;">
             
             <div class="ocr-status" id="ocrStatus">
                 読み取り待機中...
@@ -605,17 +736,51 @@
                 </div>
             </div>
         </div>
+        
+        <div class="section graph-section" id="graphSection">
+            <div class="graph-container">
+                <div class="graph-title">大当確率・平均R推移</div>
+                <div class="chart-wrapper">
+                    <canvas id="chart1"></canvas>
+                </div>
+            </div>
+            
+            <div class="graph-container">
+                <div class="graph-title">ナキ/千・拾い/千・拾球率推移</div>
+                <div class="chart-wrapper">
+                    <canvas id="chart2"></canvas>
+                </div>
+            </div>
+            
+            <div class="graph-container">
+                <div class="graph-title">期待差玉からのヒキの多寡推移</div>
+                <div class="chart-wrapper">
+                    <canvas id="chart3"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script>
         // 要素取得
         const uploadBtn = document.getElementById('uploadBtn');
+        const multiUploadBtn = document.getElementById('multiUploadBtn');
         const fileInput = document.getElementById('fileInput');
+        const multiFileInput = document.getElementById('multiFileInput');
         const calcBtn = document.getElementById('calcBtn');
         const resetBtn = document.getElementById('resetBtn');
         const resultSection = document.getElementById('resultSection');
+        const graphSection = document.getElementById('graphSection');
         const ocrStatus = document.getElementById('ocrStatus');
         const debugMode = document.getElementById('debugMode');
+        
+        // 複数画像のデータを保持
+        let multipleData = [];
+        
+        // チャートインスタンスを保持
+        let chart1 = null;
+        let chart2 = null;
+        let chart3 = null;
         
         // フォーカス時に全選択（上書きモード）
         const inputs = document.querySelectorAll('input[type="number"]');
@@ -627,15 +792,31 @@
         
         // イベント設定
         uploadBtn.addEventListener('click', () => fileInput.click());
+        multiUploadBtn.addEventListener('click', () => multiFileInput.click());
         
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
+                multipleData = []; // リセット
+                graphSection.style.display = 'none';
                 performOCR(file);
             }
         });
         
-        calcBtn.addEventListener('click', calculate);
+        multiFileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                multipleData = []; // リセット
+                await processMultipleFiles(files);
+            }
+        });
+        
+        calcBtn.addEventListener('click', () => {
+            calculate();
+            if (multipleData.length > 1) {
+                drawCharts();
+            }
+        });
         resetBtn.addEventListener('click', () => location.reload());
         
         // Google Vision API を使用したOCR処理
@@ -1049,6 +1230,346 @@
             
             resultSection.style.display = 'block';
             resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // グラフ描画
+        function drawCharts() {
+            if (multipleData.length < 2) return;
+            
+            // データを打込順にソート
+            const sortedData = [...multipleData].sort((a, b) => a.A - b.A);
+            
+            // 各データポイントを計算
+            const chartData = sortedData.map(data => {
+                const jackpotCount = (data.J || 0) + (data.K || 0) + (data.L || 0);
+                const avgRound = jackpotCount > 0 ? ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2) / jackpotCount : 0;
+                const jackpotProbDenom = jackpotCount > 0 ? data.X / jackpotCount : 999;
+                const nakiPer = data.A > 0 ? data.X / (data.A / 2) : 0;
+                const pickupPer = data.A > 0 ? data.E / (data.A / 2) : 0;
+                const pickupRate = data.X > 0 ? (data.E / data.X) * 100 : 0;
+                
+                // ヒキ計算
+                const roundHiki = ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2 - jackpotCount * 5) * 110;
+                const spHiki = ((data.H || 0) - ((data.G || 0) / 3)) * 550;
+                const repHiki = ((data.D || 0) - ((data.I || 0) / 25.2)) * 550;
+                const normHiki = ((data.F || 0) - ((data.I || 0) / 8.4)) * 550;
+                const totalHiki = roundHiki + spHiki + repHiki + normHiki;
+                
+                return {
+                    utikomi: data.A,
+                    jackpotProbDenom: Math.min(Math.max(jackpotProbDenom, 10), 40), // 10-40の範囲に制限
+                    avgRound: avgRound,
+                    nakiPer: nakiPer,
+                    pickupPer: pickupPer,
+                    pickupRate: pickupRate,
+                    totalHiki: totalHiki
+                };
+            });
+            
+            const utikomiValues = chartData.map(d => d.utikomi);
+            const maxUtikomi = Math.max(...utikomiValues);
+            
+            // グラフ1: 大当確率・平均R
+            drawChart1(chartData, maxUtikomi);
+            
+            // グラフ2: ナキ/千・拾い/千・拾球率
+            drawChart2(chartData, maxUtikomi);
+            
+            // グラフ3: ヒキ
+            drawChart3(chartData, maxUtikomi);
+            
+            graphSection.style.display = 'block';
+        }
+        
+        // グラフ1: 大当確率・平均R
+        function drawChart1(chartData, maxUtikomi) {
+            const ctx = document.getElementById('chart1').getContext('2d');
+            
+            if (chart1) {
+                chart1.destroy();
+            }
+            
+            chart1 = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.map(d => d.utikomi),
+                    datasets: [{
+                        label: '大当確率(1/x)',
+                        data: chartData.map(d => d.jackpotProbDenom),
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.1
+                    }, {
+                        label: '平均R',
+                        data: chartData.map(d => d.avgRound),
+                        borderColor: '#f87171',
+                        backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                        yAxisID: 'y2',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: 0,
+                            max: maxUtikomi,
+                            title: {
+                                display: true,
+                                text: '打込',
+                                color: '#888'
+                            },
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#888'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'left',
+                            min: 10,
+                            max: 40,
+                            reverse: true,
+                            title: {
+                                display: true,
+                                text: '大当確率(1/x)',
+                                color: '#4ade80'
+                            },
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#4ade80'
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            position: 'right',
+                            min: 3,
+                            max: 10,
+                            title: {
+                                display: true,
+                                text: '平均R',
+                                color: '#f87171'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                color: '#f87171'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#888'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // グラフ2: ナキ/千・拾い/千・拾球率
+        function drawChart2(chartData, maxUtikomi) {
+            const ctx = document.getElementById('chart2').getContext('2d');
+            
+            if (chart2) {
+                chart2.destroy();
+            }
+            
+            chart2 = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.map(d => d.utikomi),
+                    datasets: [{
+                        label: 'ナキ/千',
+                        data: chartData.map(d => d.nakiPer),
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.1
+                    }, {
+                        label: '拾い/千',
+                        data: chartData.map(d => d.pickupPer),
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.1
+                    }, {
+                        label: '拾球率(%)',
+                        data: chartData.map(d => d.pickupRate),
+                        borderColor: '#f87171',
+                        backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                        yAxisID: 'y2',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: 0,
+                            max: maxUtikomi,
+                            title: {
+                                display: true,
+                                text: '打込',
+                                color: '#888'
+                            },
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#888'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'left',
+                            min: 3,
+                            max: 18,
+                            title: {
+                                display: true,
+                                text: 'ナキ/千・拾い/千',
+                                color: '#888'
+                            },
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#888'
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            position: 'right',
+                            min: 25,
+                            max: 80,
+                            title: {
+                                display: true,
+                                text: '拾球率(%)',
+                                color: '#f87171'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                color: '#f87171'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#888'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // グラフ3: ヒキ
+        function drawChart3(chartData, maxUtikomi) {
+            const ctx = document.getElementById('chart3').getContext('2d');
+            
+            if (chart3) {
+                chart3.destroy();
+            }
+            
+            chart3 = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.map(d => d.utikomi),
+                    datasets: [{
+                        label: '期待差玉からのヒキの多寡',
+                        data: chartData.map(d => d.totalHiki),
+                        borderColor: (context) => {
+                            const value = context.parsed.y;
+                            return value >= 0 ? '#4ade80' : '#f87171';
+                        },
+                        backgroundColor: (context) => {
+                            const value = context.parsed.y;
+                            return value >= 0 ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 113, 113, 0.1)';
+                        },
+                        segment: {
+                            borderColor: (ctx) => ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171',
+                        },
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: 0,
+                            max: maxUtikomi,
+                            title: {
+                                display: true,
+                                text: '打込',
+                                color: '#888'
+                            },
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#888'
+                            }
+                        },
+                        y: {
+                            min: -5000,
+                            max: 5000,
+                            title: {
+                                display: true,
+                                text: 'ヒキ(個)',
+                                color: '#888'
+                            },
+                            grid: {
+                                color: '#333',
+                                lineWidth: (context) => context.tick.value === 0 ? 2 : 1
+                            },
+                            ticks: {
+                                color: '#888',
+                                callback: function(value) {
+                                    return value >= 0 ? '+' + value.toLocaleString() : value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#888'
+                            }
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>
