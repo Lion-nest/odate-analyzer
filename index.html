@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>おだて豚 データ解析ツール</title>
+    <title>おだて豚 データ解析ツール v55</title>
     <style>
         * {
             margin: 0;
@@ -17,6 +17,7 @@
             color: #fff;
             padding: 10px;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         .container {
@@ -747,6 +748,12 @@
     </div>
     
     <script>
+        // エラーハンドリングを追加
+        window.addEventListener('error', function(e) {
+            e.preventDefault();
+            console.error('Error caught:', e.error);
+        });
+        
         // 要素取得
         const uploadBtn = document.getElementById('uploadBtn');
         const multiUploadBtn = document.getElementById('multiUploadBtn');
@@ -1511,11 +1518,14 @@
                     datasets: [{
                         label: 'ヒキの多寡',
                         data: graphData.map(d => d.totalHiki),
-                        borderColor: graphData.map(d => d.totalHiki >= 0 ? '#4ade80' : '#f87171'),
-                        backgroundColor: graphData.map(d => d.totalHiki >= 0 ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 113, 113, 0.1)'),
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
                         segment: {
                             borderColor: function(ctx) {
-                                return ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171';
+                                if (ctx.p0 && ctx.p0.parsed) {
+                                    return ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171';
+                                }
+                                return '#4ade80';
                             }
                         },
                         tension: 0.3,
