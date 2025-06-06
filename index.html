@@ -709,6 +709,20 @@
             </div>
         </div>
         
+        <div class="section multi-data-edit-section" id="multiDataEditSection">
+            <button class="edit-toggle-btn" id="editToggleBtn">
+                <span>📝 読み取りデータの確認・編集</span>
+                <span class="edit-icon">▼</span>
+            </button>
+            
+            <div class="multi-data-container" id="multiDataContainer">
+                <div class="edit-notice">
+                    ※ 各データを修正後、「更新」ボタンを押してから全体の「計算」を実行してください
+                </div>
+                <div id="editDataList"></div>
+            </div>
+        </div>
+        
         <div class="section data-table-section" id="dataTableSection">
             <div class="data-table-container">
                 <div class="data-table-title">📊 データ推移表</div>
@@ -790,6 +804,10 @@
         const graphSection = document.getElementById('graphSection');
         const ocrStatus = document.getElementById('ocrStatus');
         const debugMode = document.getElementById('debugMode');
+        const multiDataEditSection = document.getElementById('multiDataEditSection');
+        const editToggleBtn = document.getElementById('editToggleBtn');
+        const multiDataContainer = document.getElementById('multiDataContainer');
+        const editDataList = document.getElementById('editDataList');
         
         // 複数画像のデータを保持
         let multipleData = [];
@@ -835,6 +853,15 @@
             }
         });
         resetBtn.addEventListener('click', () => location.reload());
+        
+        // 編集トグルボタンのイベント
+        editToggleBtn.addEventListener('click', () => {
+            editToggleBtn.classList.toggle('active');
+            multiDataContainer.classList.toggle('show');
+            if (multiDataContainer.classList.contains('show')) {
+                displayEditableData();
+            }
+        });
         
         // 複数ファイルの処理
         async function processMultipleFiles(files) {
