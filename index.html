@@ -276,7 +276,6 @@
             font-size: 22px;
         }
         
-        /* 単位のスタイル */
         .unit {
             font-size: 14px;
             color: #888;
@@ -292,7 +291,6 @@
             font-size: 12px;
         }
         
-        /* R振分のスタイル */
         .r-dist {
             font-size: 14px;
         }
@@ -324,7 +322,6 @@
             font-weight: normal;
         }
         
-        /* ヒキの色 */
         .positive {
             color: #4ade80;
         }
@@ -376,7 +373,6 @@
             display: block;
         }
         
-        /* 複数データ表のスタイル */
         .data-table-section {
             display: none;
             margin-top: 20px;
@@ -431,7 +427,6 @@
             color: #f87171;
         }
         
-        /* グラフセクションのスタイル */
         .graph-section {
             display: none;
             margin-top: 20px;
@@ -946,7 +941,9 @@
                 if (data[field] !== undefined) {
                     const element = document.getElementById(inputId);
                     if (element) {
-                        element.value = data[field];
+                        // ハイフンや未定義の値は0として設定
+                        const value = data[field];
+                        element.value = (value === '-' || value === '－' || value === null || value === undefined) ? 0 : value;
                     }
                 }
             }
@@ -1358,6 +1355,7 @@
                 // 構造化データがある場合は優先的に使用
                 if (result.structuredData && result.structuredData.extractedValues) {
                     debugLog('構造化データを使用します');
+                    debugLog('抽出前のデータ: ' + JSON.stringify(result.structuredData.extractedValues));
                     processStructuredData(result.structuredData);
                 } else {
                     // 従来の処理方法にフォールバック
@@ -1718,12 +1716,18 @@
         // ヒキのフォーマット
         function formatHiki(val) {
             const rounded = Math.round(val);
-            const sign = rounded >= 0 ? '+' : '';
             const absVal = Math.abs(rounded);
             // 3桁ごとにカンマを追加
             const formatted = absVal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            return sign + formatted;
+            // プラスマイナスの記号を必ず付ける
+            if (rounded >= 0) {
+                return '+' + formatted;
+            } else {
+                return '-' + formatted;
+            }
         }
     </script>
+</body>
+</html>
 </body>
 </html>
