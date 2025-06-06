@@ -103,8 +103,10 @@ function extractStructuredData(detections, fullTextAnnotation) {
   const fullText = fullTextAnnotation.text;
   console.log('Full OCR text:', fullText);
 
-  // 改行や余分な空白を正規化
-  const normalizedText = fullText.replace(/\s+/g, ' ').trim();
+  // 改行や余分な空白を正規化、ハイフンを0に置換
+  let normalizedText = fullText.replace(/\s+/g, ' ').trim();
+  // ハイフン（全角・半角）を0として扱う
+  normalizedText = normalizedText.replace(/[－-]/g, '0');
   console.log('Normalized text:', normalizedText);
 
   const extractedValues = {};
@@ -116,14 +118,29 @@ function extractStructuredData(detections, fullTextAnnotation) {
     extractedValues.X = parseInt(targetGameMatch[1]);
   }
 
+  // ハイフンを含む可能性のある数値も考慮
+  const processValue = (text) => {
+    // ハイフンの場合は0を返す
+    if (text === '0' || text === '-' || text === '－') return 0;
+    return parseInt(text) || 0;
+  };
+
   // 数値の配列を作成（順序を保持）
   const allNumbers = [];
-  const numberMatches = normalizedText.matchAll(/\d+/g);
+  // 数値とハイフンをマッチング（ハイフンも数値として扱う）
+  const numberMatches = normalizedText.matchAll(/(\d+|[－-])/g);
   for (const match of numberMatches) {
+    const text = match[0];
+    let value;
+    if (text === '-' || text === '－') {
+      value = 0;
+    } else {
+      value = parseInt(text);
+    }
     allNumbers.push({
-      value: parseInt(match[0]),
+      value: value,
       index: match.index,
-      text: match[0]
+      text: text
     });
   }
   console.log('All numbers found:', allNumbers);
@@ -159,10 +176,10 @@ function extractStructuredData(detections, fullTextAnnotation) {
     const numbersAfterTarget = allNumbers.filter(n => n.index > afterTargetIndex).slice(0, 4);
     
     if (numbersAfterTarget.length >= 4) {
-      extractedValues.A = numbersAfterTarget[0].value; // 打込
-      extractedValues.B = numbersAfterTarget[1].value; // 2穴
-      extractedValues.C = numbersAfterTarget[2].value; // リプレイ
-      extractedValues.D = numbersAfterTarget[3].value; // リプ→V
+      extractedValues.A = processValue(numbersAfterTarget[0].text); // 打込
+      extractedValues.B = processValue(numbersAfterTarget[1].text); // 2穴
+      extractedValues.C = processValue(numbersAfterTarget[2].text); // リプレイ
+      extractedValues.D = processValue(numbersAfterTarget[3].text); // リプ→V
     }
   }
 
@@ -171,10 +188,10 @@ function extractStructuredData(detections, fullTextAnnotation) {
   if (haneIndex !== -1) {
     const numbersBeforeHane = allNumbers.filter(n => n.index < haneIndex).slice(-4);
     if (numbersBeforeHane.length >= 4) {
-      extractedValues.E = numbersBeforeHane[0].value; // 羽根拾
-      extractedValues.F = numbersBeforeHane[1].value; // V入賞
-      extractedValues.G = numbersBeforeHane[2].value; // SP
-      extractedValues.H = numbersBeforeHane[3].value; // SP→V
+      extractedValues.E = processValue(numbersBeforeHane[0].text); // 羽根拾
+      extractedValues.F = processValue(numbersBeforeHane[1].text); // V入賞
+      extractedValues.G = processValue(numbersBeforeHane[2].text); // SP
+      extractedValues.H = processValue(numbersBeforeHane[3].text); // SP→V
     }
   }
 
@@ -183,10 +200,10 @@ function extractStructuredData(detections, fullTextAnnotation) {
   if (keriIndex !== -1) {
     const numbersBeforeKeri = allNumbers.filter(n => n.index < keriIndex).slice(-4);
     if (numbersBeforeKeri.length >= 4) {
-      extractedValues.I = numbersBeforeKeri[0].value; // 拾い→蹴り
-      extractedValues.J = numbersBeforeKeri[1].value; // 10R
-      extractedValues.K = numbersBeforeKeri[2].value; // 5R
-      extractedValues.L = numbersBeforeKeri[3].value; // 3R
+      extractedValues.I = processValue(numbersBeforeKeri[0].text); // 拾い→蹴り
+      extractedValues.J = processValue(numbersBeforeKeri[1].text); // 10R
+      extractedValues.K = processValue(numbersBeforeKeri[2].text); // 5R
+      extractedValues.L = processValue(numbersBeforeKeri[3].text); // 3R
     }
   }
 
