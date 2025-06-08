@@ -886,23 +886,25 @@
     </div>
     
     <script>
-        // 要素取得
-        const uploadBtn = document.getElementById('uploadBtn');
-        const multiUploadBtn = document.getElementById('multiUploadBtn');
-        const fileInput = document.getElementById('fileInput');
-        const multiFileInput = document.getElementById('multiFileInput');
-        const calcBtn = document.getElementById('calcBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const resultSection = document.getElementById('resultSection');
-        const dataTableSection = document.getElementById('dataTableSection');
-        const dataTableBody = document.getElementById('dataTableBody');
-        const intervalTableBody = document.getElementById('intervalTableBody');
-        const graphSection = document.getElementById('graphSection');
-        const ocrStatus = document.getElementById('ocrStatus');
-        const debugMode = document.getElementById('debugMode');
-        const multiDataEditSection = document.getElementById('multiDataEditSection');
-        const editToggleBtn = document.getElementById('editToggleBtn');
-        const multiDataEditContainer = document.getElementById('multiDataEditContainer');
+        // DOMContentLoadedイベントを待つ
+        document.addEventListener('DOMContentLoaded', function() {
+            // 要素取得
+            const uploadBtn = document.getElementById('uploadBtn');
+            const multiUploadBtn = document.getElementById('multiUploadBtn');
+            const fileInput = document.getElementById('fileInput');
+            const multiFileInput = document.getElementById('multiFileInput');
+            const calcBtn = document.getElementById('calcBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const resultSection = document.getElementById('resultSection');
+            const dataTableSection = document.getElementById('dataTableSection');
+            const dataTableBody = document.getElementById('dataTableBody');
+            const intervalTableBody = document.getElementById('intervalTableBody');
+            const graphSection = document.getElementById('graphSection');
+            const ocrStatus = document.getElementById('ocrStatus');
+            const debugMode = document.getElementById('debugMode');
+            const multiDataEditSection = document.getElementById('multiDataEditSection');
+            const editToggleBtn = document.getElementById('editToggleBtn');
+            const multiDataEditContainer = document.getElementById('multiDataEditContainer');
         
         // 複数画像のデータを保持
         let multipleData = [];
