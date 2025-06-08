@@ -563,8 +563,8 @@
         <h1>🐷 おだて豚 データ解析 v68</h1>
         
         <div class="section">
-            <button class="upload-btn" id="uploadBtn">📸 スクショを選択</button>
-            <button class="upload-btn green" id="multiUploadBtn">📸 スクショ連続選択</button>
+            <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">📸 スクショを選択</button>
+            <button class="upload-btn green" id="multiUploadBtn" onclick="document.getElementById('multiFileInput').click()">📸 スクショ連続選択</button>
             <input type="file" id="fileInput" accept="image/*">
             <input type="file" id="multiFileInput" accept="image/*" multiple style="display: none;">
             
