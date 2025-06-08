@@ -1,4 +1,824 @@
-<!DOCTYPE html>
+<script>
+        // グローバル変数
+        let multipleData = [];
+        let charts = [];
+        
+        // 初期化関数
+        function init() {
+            console.log('初期化開始');
+            
+            // 要素取得
+            const fileInput = document.getElementById('fileInput');
+            const multiFileInput = document.getElementById('multiFileInput');
+            const calcBtn = document.getElementById('calcBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const editToggleBtn = document.getElementById('editToggleBtn');
+            
+            console.log('要素取得完了', {fileInput, multiFileInput, calcBtn, resetBtn});
+            
+            // フォーカス時に全選択
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.select();
+                });
+            });
+            
+            // ファイル選択イベント
+            fileInput.addEventListener('change', (e) => {
+                console.log('ファイル選択');
+                const file = e.target.files[0];
+                if (file) {
+                    multipleData = [];
+                    document.getElementById('dataTableSection').style.display = 'none';
+                    document.getElementById('graphSection').style.display = 'none';
+                    document.getElementById('multiDataEditSection').style.display = 'none';
+                    performOCR(file);
+                }
+            });
+            
+            multiFileInput.addEventListener('change', async (e) => {
+                console.log('複数ファイル選択');
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                    multipleData = [];
+                    await processMultipleFiles(files);
+                }
+            });
+            
+            // ボタンイベント
+            calcBtn.addEventListener('click', () => {
+                if (multipleData.length > 0) {
+                    updateMultipleDataFromEdit();
+                }
+                calculate();
+                if (multipleData.length > 1) {
+                    displayDataTable();
+                    displayIntervalTable();
+                    displayGraphs();
+                }
+            });
+            
+            resetBtn.addEventListener('click', () => location.reload());
+            
+            editToggleBtn.addEventListener('click', () => {
+                const container = document.getElementById('multiDataEditContainer');
+                container.classList.toggle('show');
+                if (container.classList.contains('show')) {
+                    editToggleBtn.textContent = '📝 読み取りデータを閉じる';
+                } else {
+                    editToggleBtn.textContent = '📝 読み取りデータの確認・修正';
+                }
+            });
+            
+            console.log('初期化完了');
+        }
+        
+        // OCR処理
+        async function performOCR(file) {
+            const ocrStatus = document.getElementById('ocrStatus');
+            ocrStatus.textContent = '画像をアップロード中...';
+            ocrStatus.className = 'ocr-status show loading';
+            
+            try {
+                // 画像をBase64に変換
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                ocrStatus.textContent = 'Google Vision APIで認識中...';
+                console.log('API呼び出し開始');
+                
+                // Netlify Function を呼び出し
+                const response = await fetch('/.netlify/functions/ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                console.log('API応答:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('OCR結果:', result);
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // 構造化データがある場合は優先的に使用
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    console.log('構造化データを使用');
+                    processStructuredData(result.structuredData);
+                } else if (result.text) {
+                    console.log('テキストデータを使用');
+                    processBasicOCR(result.text);
+                }
+                
+                ocrStatus.textContent = '✅ 認識完了 - 必要に応じて数値を修正してください';
+                ocrStatus.className = 'ocr-status show success';
+                
+                // 対象ゲーム数にフォーカス
+                document.getElementById('inputX').focus();
+                
+            } catch (error) {
+                console.error('OCRエラー:', error);
+                ocrStatus.textContent = '❌ 認識エラー - 手動で入力してください';
+                ocrStatus.className = 'ocr-status show error';
+            }
+        }
+        
+        // 複数ファイル処理
+        async function processMultipleFiles(files) {
+            const ocrStatus = document.getElementById('ocrStatus');
+            ocrStatus.textContent = `${files.length}枚の画像を処理中...`;
+            ocrStatus.className = 'ocr-status show loading';
+            
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    ocrStatus.textContent = `処理中... (${i + 1}/${files.length})`;
+                    const data = await performOCRForMultiple(files[i]);
+                    if (data) {
+                        multipleData.push(data);
+                    }
+                }
+                
+                if (multipleData.length > 0) {
+                    // 打込順にソート
+                    multipleData.sort((a, b) => (a.A || 0) - (b.A || 0));
+                    
+                    // 編集インターフェースを作成
+                    createEditInterface();
+                    
+                    // 打込が最大のデータを選択
+                    const maxData = multipleData.reduce((max, current) => 
+                        ((current.A || 0) > (max.A || 0)) ? current : max
+                    );
+                    
+                    // フィールドに値を設定
+                    setFieldValues(maxData);
+                    
+                    ocrStatus.textContent = `✅ ${multipleData.length}枚の処理完了 - 最大打込: ${maxData.A}`;
+                    ocrStatus.className = 'ocr-status show success';
+                }
+            } catch (error) {
+                console.error('複数ファイル処理エラー:', error);
+                ocrStatus.textContent = '❌ 処理エラー';
+                ocrStatus.className = 'ocr-status show error';
+            }
+        }
+        
+        // 複数選択用のOCR処理
+        async function performOCRForMultiple(file) {
+            try {
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                const response = await fetch('/.netlify/functions/ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // 構造化データから値を抽出
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    return result.structuredData.extractedValues;
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('OCRエラー:', error);
+                return null;
+            }
+        }
+        
+        // 構造化データの処理
+        function processStructuredData(structuredData) {
+            if (!structuredData || !structuredData.extractedValues) {
+                console.log('構造化データが見つかりません');
+                return;
+            }
+            
+            const values = structuredData.extractedValues;
+            console.log('抽出された構造化データ:', values);
+            
+            setFieldValues(values);
+            validateAndAdjust();
+        }
+        
+        // 基本的なテキスト処理
+        function processBasicOCR(text) {
+            console.log('OCRテキスト:', text);
+            const allNumbers = extractNumbersByPosition(text);
+            assignNumbersToInputs(allNumbers);
+        }
+        
+        // フィールドに値を設定
+        function setFieldValues(data) {
+            const fieldMapping = {
+                X: 'inputX',
+                A: 'inputA',
+                B: 'inputB',
+                C: 'inputC',
+                D: 'inputD',
+                E: 'inputE',
+                F: 'inputF',
+                G: 'inputG',
+                H: 'inputH',
+                I: 'inputI',
+                J: 'inputJ',
+                K: 'inputK',
+                L: 'inputL'
+            };
+            
+            for (const [field, inputId] of Object.entries(fieldMapping)) {
+                if (data[field] !== undefined) {
+                    const element = document.getElementById(inputId);
+                    if (element) {
+                        element.value = data[field];
+                    }
+                }
+            }
+        }
+        
+        // 編集画面からデータを更新
+        function updateMultipleDataFromEdit() {
+            const editItems = document.querySelectorAll('.edit-data-item');
+            editItems.forEach((item, index) => {
+                if (multipleData[index]) {
+                    const fields = ['X', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+                    fields.forEach(field => {
+                        const input = item.querySelector(`input[data-field="${field}"]`);
+                        if (input) {
+                            multipleData[index][field] = parseInt(input.value) || 0;
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 編集画面を作成
+        function createEditInterface() {
+            const container = document.getElementById('multiDataEditContainer');
+            container.innerHTML = '';
+            
+            multipleData.forEach((data, index) => {
+                const editItem = document.createElement('div');
+                editItem.className = 'edit-data-item';
+                
+                const title = document.createElement('div');
+                title.className = 'edit-data-title';
+                title.textContent = `データ ${index + 1} - 打込: ${data.A || 0}`;
+                editItem.appendChild(title);
+                
+                const grid = document.createElement('div');
+                grid.className = 'edit-data-grid';
+                
+                const fields = [
+                    { key: 'X', label: '対象ゲーム' },
+                    { key: 'A', label: '打込' },
+                    { key: 'B', label: '2穴' },
+                    { key: 'C', label: 'リプレイ' },
+                    { key: 'D', label: 'リプV' },
+                    { key: 'E', label: '羽根拾' },
+                    { key: 'F', label: 'V入賞' },
+                    { key: 'G', label: 'SP' },
+                    { key: 'H', label: 'SP→V' },
+                    { key: 'I', label: '蹴り' },
+                    { key: 'J', label: '10R' },
+                    { key: 'K', label: '5R' },
+                    { key: 'L', label: '3R' }
+                ];
+                
+                fields.forEach(field => {
+                    const fieldDiv = document.createElement('div');
+                    fieldDiv.className = 'edit-data-field';
+                    
+                    const label = document.createElement('label');
+                    label.textContent = field.label;
+                    fieldDiv.appendChild(label);
+                    
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.value = data[field.key] || 0;
+                    input.setAttribute('data-field', field.key);
+                    input.setAttribute('data-index', index);
+                    
+                    fieldDiv.appendChild(input);
+                    grid.appendChild(fieldDiv);
+                });
+                
+                editItem.appendChild(grid);
+                container.appendChild(editItem);
+            });
+            
+            if (multipleData.length > 0) {
+                document.getElementById('multiDataEditSection').style.display = 'block';
+            }
+        }
+        
+        // 位置ベースで数値を抽出
+        function extractNumbersByPosition(text) {
+            const lines = text.split('\n').filter(line => line.trim());
+            const allNumbers = [];
+            
+            lines.forEach((line, lineIndex) => {
+                const matches = line.matchAll(/\d+/g);
+                for (const match of matches) {
+                    const num = parseInt(match[0]);
+                    if (num >= 0) {
+                        allNumbers.push({
+                            value: num,
+                            line: lineIndex,
+                            position: match.index,
+                            text: match[0]
+                        });
+                    }
+                }
+            });
+            
+            return allNumbers;
+        }
+        
+        // レイアウトパターンに基づいて数値を割り当て
+        function assignNumbersToInputs(numbers) {
+            if (numbers.length === 0) return;
+            
+            // 数値を大きさでソート（大きい順）
+            const sortedByValue = [...numbers].sort((a, b) => b.value - a.value);
+            
+            // 数値範囲に基づく分類
+            const ranges = {
+                extraLarge: [], // 1000以上 (X - 対象ゲーム数)
+                veryLarge: [],  // 300-1000 (E, I)
+                large: [],      // 100-300 (A)
+                medium: [],     // 50-100 (B)
+                small: []       // 0-50 (C,D,F,G,H,J,K,L)
+            };
+            
+            sortedByValue.forEach(num => {
+                if (num.value >= 1000) {
+                    ranges.extraLarge.push(num.value);
+                } else if (num.value >= 300) {
+                    ranges.veryLarge.push(num.value);
+                } else if (num.value >= 100) {
+                    ranges.large.push(num.value);
+                } else if (num.value >= 50) {
+                    ranges.medium.push(num.value);
+                } else {
+                    ranges.small.push(num.value);
+                }
+            });
+            
+            // 割り当て
+            if (ranges.extraLarge.length > 0) {
+                document.getElementById('inputX').value = ranges.extraLarge[0];
+            } else if (ranges.veryLarge.length > 0) {
+                document.getElementById('inputX').value = ranges.veryLarge[0];
+            }
+            
+            if (ranges.large.length > 0) {
+                document.getElementById('inputA').value = ranges.large[0];
+            }
+            
+            if (ranges.veryLarge.length > 0) {
+                const eIndex = ranges.extraLarge.length > 0 ? 0 : 1;
+                if (ranges.veryLarge[eIndex]) {
+                    document.getElementById('inputE').value = ranges.veryLarge[eIndex];
+                }
+            }
+            
+            validateAndAdjust();
+        }
+        
+        // 検証と調整
+        function validateAndAdjust() {
+            // E > I の関係を確認
+            const e = parseInt(document.getElementById('inputE').value) || 0;
+            const i = parseInt(document.getElementById('inputI').value) || 0;
+            if (e > 0 && i > 0 && e < i) {
+                document.getElementById('inputE').value = i;
+                document.getElementById('inputI').value = e;
+            }
+            
+            // C >= D の関係を確認
+            const c = parseInt(document.getElementById('inputC').value) || 0;
+            const d = parseInt(document.getElementById('inputD').value) || 0;
+            if (c > 0 && d > 0 && c < d) {
+                document.getElementById('inputC').value = d;
+                document.getElementById('inputD').value = c;
+            }
+            
+            // G >= H の関係を確認
+            const g = parseInt(document.getElementById('inputG').value) || 0;
+            const h = parseInt(document.getElementById('inputH').value) || 0;
+            if (g > 0 && h > 0 && g < h) {
+                document.getElementById('inputG').value = h;
+                document.getElementById('inputH').value = g;
+            }
+        }
+        
+        // 計算実行
+        function calculate() {
+            // 値取得
+            const v = {
+                X: parseInt(document.getElementById('inputX').value) || 0,
+                A: parseInt(document.getElementById('inputA').value) || 0,
+                B: parseInt(document.getElementById('inputB').value) || 0,
+                C: parseInt(document.getElementById('inputC').value) || 0,
+                D: parseInt(document.getElementById('inputD').value) || 0,
+                E: parseInt(document.getElementById('inputE').value) || 0,
+                F: parseInt(document.getElementById('inputF').value) || 0,
+                G: parseInt(document.getElementById('inputG').value) || 0,
+                H: parseInt(document.getElementById('inputH').value) || 0,
+                I: parseInt(document.getElementById('inputI').value) || 0,
+                J: parseInt(document.getElementById('inputJ').value) || 0,
+                K: parseInt(document.getElementById('inputK').value) || 0,
+                L: parseInt(document.getElementById('inputL').value) || 0
+            };
+            
+            // 計算
+            const jackpotCount = v.J + v.K + v.L;
+            const avgRound = jackpotCount > 0 ? ((v.J * 9 + v.K * 4 + v.L * 2) / jackpotCount).toFixed(1) : '0';
+            
+            // 結果表示
+            document.getElementById('resultA').textContent = v.A;
+            document.getElementById('jackpotCount').textContent = jackpotCount;
+            document.getElementById('jackpotProb').textContent = jackpotCount > 0 ? '1/' + (v.X / jackpotCount).toFixed(1) : '-';
+            document.getElementById('jCount').textContent = v.J;
+            document.getElementById('kCount').textContent = v.K;
+            document.getElementById('lCount').textContent = v.L;
+            document.getElementById('avgRound').textContent = avgRound;
+            
+            document.getElementById('totalNaki').textContent = v.X;
+            document.getElementById('nakiPer').textContent = v.A > 0 ? (v.X / (v.A / 2)).toFixed(1) : '-';
+            document.getElementById('totalPickup').textContent = v.E;
+            document.getElementById('pickupPer').textContent = v.A > 0 ? (v.E / (v.A / 2)).toFixed(1) : '-';
+            document.getElementById('pickupRate').textContent = v.X > 0 ? ((v.E / v.X) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('yakumonoProb').textContent = jackpotCount > 0 ? '1/' + (v.E / jackpotCount).toFixed(1) : '-';
+            
+            document.getElementById('kickRate').textContent = (v.E - v.G) > 0 ? ((v.I / (v.E - v.G)) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('spRate').textContent = v.E > 0 ? ((v.G / v.E) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('spSuccess').textContent = v.G > 0 ? ((v.H / v.G) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('replaySuccess').textContent = v.C > 0 ? ((v.D / v.C) * 100).toFixed(1) + '%' : '-';
+            
+            // ヒキ計算
+            const roundHiki = ((v.J * 9 + v.K * 4 + v.L * 2) - (jackpotCount * 5)) * 110;
+            const spHiki = (v.H - (v.G / 3)) * 550;
+            const repHiki = (v.D - (v.I / 25.2)) * 550;
+            const normHiki = (v.F - (v.I / 8.4)) * 550;
+            const totalHiki = roundHiki + spHiki + repHiki + normHiki;
+            
+            // ヒキの値を設定（色のクラスも付与）
+            const setHikiValue = (elementId, value) => {
+                const element = document.getElementById(elementId);
+                element.textContent = formatHiki(value);
+                element.className = value >= 0 ? 'hiki-value positive' : 'hiki-value negative';
+            };
+            
+            setHikiValue('totalHiki', totalHiki);
+            setHikiValue('rHiki', roundHiki);
+            setHikiValue('spHiki', spHiki);
+            setHikiValue('repHiki', repHiki);
+            setHikiValue('normHiki', normHiki);
+            
+            document.getElementById('resultSection').style.display = 'block';
+            document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // ヒキのフォーマット
+        function formatHiki(val) {
+            const rounded = Math.round(val);
+            const sign = rounded >= 0 ? '+' : '';
+            const absVal = Math.abs(rounded);
+            const formatted = absVal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return sign + formatted;
+        }
+        
+        // データテーブル表示
+        function displayDataTable() {
+            if (multipleData.length === 0) return;
+            
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            
+            multipleData.forEach(data => {
+                const row = calculateRowData(data);
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td>${row.utikomi}</td>
+                    <td>${row.jackpotCount}</td>
+                    <td>${row.jackpotProb}</td>
+                    <td>${row.avgRound}</td>
+                    <td>${row.nakiPer}</td>
+                    <td>${row.pickupPer}</td>
+                    <td>${row.pickupRate}</td>
+                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('dataTableSection').style.display = 'block';
+        }
+        
+        // 区間データテーブル表示
+        function displayIntervalTable() {
+            if (multipleData.length < 2) return;
+            
+            const tbody = document.getElementById('intervalTableBody');
+            tbody.innerHTML = '';
+            
+            for (let i = 1; i < multipleData.length; i++) {
+                const prevData = multipleData[i - 1];
+                const currData = multipleData[i];
+                
+                const intervalData = {
+                    X: (currData.X || 0) - (prevData.X || 0),
+                    A: (currData.A || 0) - (prevData.A || 0),
+                    B: (currData.B || 0) - (prevData.B || 0),
+                    C: (currData.C || 0) - (prevData.C || 0),
+                    D: (currData.D || 0) - (prevData.D || 0),
+                    E: (currData.E || 0) - (prevData.E || 0),
+                    F: (currData.F || 0) - (prevData.F || 0),
+                    G: (currData.G || 0) - (prevData.G || 0),
+                    H: (currData.H || 0) - (prevData.H || 0),
+                    I: (currData.I || 0) - (prevData.I || 0),
+                    J: (currData.J || 0) - (prevData.J || 0),
+                    K: (currData.K || 0) - (prevData.K || 0),
+                    L: (currData.L || 0) - (prevData.L || 0)
+                };
+                
+                const row = calculateRowData(intervalData);
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td>${prevData.A || 0}-${currData.A || 0}</td>
+                    <td>${row.jackpotCount}</td>
+                    <td>${row.jackpotProb}</td>
+                    <td>${row.avgRound}</td>
+                    <td>${row.nakiPer}</td>
+                    <td>${row.pickupPer}</td>
+                    <td>${row.pickupRate}</td>
+                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            }
+        }
+        
+        // 行データの計算
+        function calculateRowData(data) {
+            const jackpotCount = (data.J || 0) + (data.K || 0) + (data.L || 0);
+            const avgRound = jackpotCount > 0 ? 
+                ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2) / jackpotCount : 0;
+            const jackpotProb = jackpotCount > 0 ? 
+                '1/' + (data.X / jackpotCount).toFixed(1) : '-';
+            const nakiPer = data.A > 0 ? 
+                (data.X / (data.A / 2)).toFixed(1) : '-';
+            const pickupPer = data.A > 0 ? 
+                (data.E / (data.A / 2)).toFixed(1) : '-';
+            const pickupRate = data.X > 0 ? 
+                ((data.E / data.X) * 100).toFixed(1) + '%' : '-';
+            
+            // ヒキ計算
+            const roundHiki = ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2 - jackpotCount * 5) * 110;
+            const spHiki = ((data.H || 0) - ((data.G || 0) / 3)) * 550;
+            const repHiki = ((data.D || 0) - ((data.I || 0) / 25.2)) * 550;
+            const normHiki = ((data.F || 0) - ((data.I || 0) / 8.4)) * 550;
+            const totalHiki = roundHiki + spHiki + repHiki + normHiki;
+            
+            return {
+                utikomi: data.A || 0,
+                jackpotCount: jackpotCount,
+                jackpotProb: jackpotProb,
+                avgRound: avgRound.toFixed(1),
+                nakiPer: nakiPer,
+                pickupPer: pickupPer,
+                pickupRate: pickupRate,
+                hikiFormatted: formatHiki(totalHiki),
+                hikiClass: totalHiki >= 0 ? 'positive' : 'negative',
+                totalHiki: totalHiki
+            };
+        }
+        
+        // グラフ表示
+        function displayGraphs() {
+            if (multipleData.length < 2) return;
+            
+            document.getElementById('graphSection').style.display = 'block';
+            
+            // 既存のグラフを破棄
+            charts.forEach(chart => {
+                if (chart) chart.destroy();
+            });
+            charts = [];
+            
+            // 区間データを計算
+            const intervalData = [];
+            for (let i = 1; i < multipleData.length; i++) {
+                const prevData = multipleData[i - 1];
+                const currData = multipleData[i];
+                
+                const interval = {
+                    X: (currData.X || 0) - (prevData.X || 0),
+                    A: (currData.A || 0) - (prevData.A || 0),
+                    E: (currData.E || 0) - (prevData.E || 0),
+                    F: (currData.F || 0) - (prevData.F || 0),
+                    G: (currData.G || 0) - (prevData.G || 0),
+                    H: (currData.H || 0) - (prevData.H || 0),
+                    I: (currData.I || 0) - (prevData.I || 0),
+                    J: (currData.J || 0) - (prevData.J || 0),
+                    K: (currData.K || 0) - (prevData.K || 0),
+                    L: (currData.L || 0) - (prevData.L || 0),
+                    D: (currData.D || 0) - (prevData.D || 0)
+                };
+                
+                const row = calculateRowData(interval);
+                
+                let jackpotDenom = 40;
+                if (row.jackpotProb !== '-') {
+                    const parts = row.jackpotProb.split('/');
+                    if (parts.length === 2) {
+                        jackpotDenom = parseFloat(parts[1]);
+                    }
+                }
+                
+                intervalData.push({
+                    label: prevData.A || 0,
+                    utikomi: prevData.A || 0,
+                    jackpotDenom: jackpotDenom,
+                    avgRound: parseFloat(row.avgRound) || 0,
+                    nakiPer: parseFloat(row.nakiPer) || 0,
+                    pickupPer: parseFloat(row.pickupPer) || 0,
+                    pickupRate: parseFloat(row.pickupRate) || 0,
+                    totalHiki: row.totalHiki || 0
+                });
+            }
+            
+            // Chart.jsのデフォルト設定
+            Chart.defaults.color = '#888';
+            Chart.defaults.borderColor = '#333';
+            
+            // グラフ作成
+            createChart('chart1', '大当確率分母', intervalData.map(d => d.jackpotDenom), '#4a90e2', true, 10, 40, '1/');
+            createChart('chart2', '平均R', intervalData.map(d => d.avgRound), '#f5a623', false, 3, 10);
+            createChart('chart3', 'ナキ/千', intervalData.map(d => d.nakiPer), '#50e3c2', false, 6, 20);
+            createChart('chart4', '拾い/千', intervalData.map(d => d.pickupPer), '#b8e986', false, 3, 10);
+            createChart('chart5', '拾球率', intervalData.map(d => d.pickupRate), '#ff6b6b', false, 25, 80, '%');
+            
+            // ヒキの多寡グラフ
+            const maxHiki = Math.max(...intervalData.map(d => Math.abs(d.totalHiki)), 5000);
+            const ctx6 = document.getElementById('chart6').getContext('2d');
+            const chart6 = new Chart(ctx6, {
+                type: 'line',
+                data: {
+                    labels: intervalData.map(d => d.label),
+                    datasets: [{
+                        label: 'ヒキの多寡',
+                        data: intervalData.map(d => d.totalHiki),
+                        borderColor: '#9333ea',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        segment: {
+                            borderColor: function(ctx) {
+                                if (ctx.p0 && ctx.p0.parsed) {
+                                    return ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171';
+                                }
+                                return '#9333ea';
+                            }
+                        },
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#333' },
+                            ticks: { font: { size: 10 } },
+                            title: {
+                                display: true,
+                                text: '打込',
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            min: -maxHiki,
+                            max: maxHiki,
+                            grid: { 
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return '#666';
+                                    }
+                                    return '#333';
+                                }
+                            },
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    return (value >= 0 ? '+' : '') + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            charts.push(chart6);
+            
+            function createChart(canvasId, label, data, color, reverse = false, min, max, suffix = '') {
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: intervalData.map(d => d.label),
+                        datasets: [{
+                            label: label,
+                            data: data,
+                            borderColor: color,
+                            backgroundColor: color.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: '#333' },
+                                ticks: { font: { size: 10 } },
+                                title: {
+                                    display: true,
+                                    text: '打込',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                min: min,
+                                max: max,
+                                reverse: reverse,
+                                grid: { color: '#333' },
+                                ticks: {
+                                    font: { size: 10 },
+                                    callback: function(value) {
+                                        return suffix ? suffix + value.toFixed(0) : value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                charts.push(chart);
+            }
+        }
+        
+        // ページ読み込み時に初期化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -63,10 +883,6 @@
         .upload-btn:disabled {
             background: #666;
             cursor: not-allowed;
-        }
-        
-        input[type="file"] {
-            display: none;
         }
         
         .ocr-status {
@@ -563,9 +1379,14 @@
         <h1>🐷 おだて豚 データ解析 v68</h1>
         
         <div class="section">
-            <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">📸 スクショを選択</button>
-            <button class="upload-btn green" id="multiUploadBtn" onclick="document.getElementById('multiFileInput').click()">📸 スクショ連続選択</button>
-            <input type="file" id="fileInput" accept="image/*">
+            <label for="fileInput" class="upload-btn" style="display: block; text-align: center;">
+                📸 スクショを選択
+            </label>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            
+            <label for="multiFileInput" class="upload-btn green" style="display: block; text-align: center;">
+                📸 スクショ連続選択
+            </label>
             <input type="file" id="multiFileInput" accept="image/*" multiple style="display: none;">
             
             <div class="ocr-status" id="ocrStatus">
@@ -886,724 +1707,14 @@
     </div>
     
     <script>
-        // DOMContentLoadedイベントを待つ
-        document.addEventListener('DOMContentLoaded', function() {
-            // 要素取得
-            const uploadBtn = document.getElementById('uploadBtn');
-            const multiUploadBtn = document.getElementById('multiUploadBtn');
-            const fileInput = document.getElementById('fileInput');
-            const multiFileInput = document.getElementById('multiFileInput');
-            const calcBtn = document.getElementById('calcBtn');
-            const resetBtn = document.getElementById('resetBtn');
-            const resultSection = document.getElementById('resultSection');
-            const dataTableSection = document.getElementById('dataTableSection');
-            const dataTableBody = document.getElementById('dataTableBody');
-            const intervalTableBody = document.getElementById('intervalTableBody');
-            const graphSection = document.getElementById('graphSection');
-            const ocrStatus = document.getElementById('ocrStatus');
-            const debugMode = document.getElementById('debugMode');
-            const multiDataEditSection = document.getElementById('multiDataEditSection');
-            const editToggleBtn = document.getElementById('editToggleBtn');
-            const multiDataEditContainer = document.getElementById('multiDataEditContainer');
-        
-        // 複数画像のデータを保持
+        // グローバル変数
         let multipleData = [];
-        
-        // グラフインスタンスを保持
         let charts = [];
         
-        // フォーカス時に全選択（上書きモード）
-        const inputs = document.querySelectorAll('input[type="number"]');
-        inputs.forEach(input => {
-            input.addEventListener('focus', function() {
-                this.select();
-            });
-        });
-        
-        // イベント設定
-        uploadBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Upload button clicked');
-            fileInput.click();
-        });
-        
-        multiUploadBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Multi upload button clicked');
-            multiFileInput.click();
-        });
-        
-        editToggleBtn.addEventListener('click', () => {
-            multiDataEditContainer.classList.toggle('show');
-            if (multiDataEditContainer.classList.contains('show')) {
-                editToggleBtn.textContent = '📝 読み取りデータを閉じる';
-            } else {
-                editToggleBtn.textContent = '📝 読み取りデータの確認・修正';
-            }
-        });
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                multipleData = []; // リセット
-                dataTableSection.style.display = 'none';
-                graphSection.style.display = 'none';
-                multiDataEditSection.style.display = 'none';
-                performOCR(file);
-            }
-        });
-        
-        multiFileInput.addEventListener('change', async (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length > 0) {
-                multipleData = []; // リセット
-                await processMultipleFiles(files);
-            }
-        });
-        
-        calcBtn.addEventListener('click', () => {
-            // 編集中のデータを更新
-            if (multipleData.length > 0) {
-                updateMultipleDataFromEdit();
-            }
-            calculate();
-            if (multipleData.length > 1) {
-                displayDataTable();
-                displayIntervalTable();
-                displayGraphs();
-            }
-        });
-        resetBtn.addEventListener('click', () => location.reload());
-        
-        // 編集画面からデータを更新
-        function updateMultipleDataFromEdit() {
-            const editItems = document.querySelectorAll('.edit-data-item');
-            editItems.forEach((item, index) => {
-                if (multipleData[index]) {
-                    const fields = ['X', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-                    fields.forEach(field => {
-                        const input = item.querySelector(`input[data-field="${field}"]`);
-                        if (input) {
-                            multipleData[index][field] = parseInt(input.value) || 0;
-                        }
-                    });
-                }
-            });
-        }
-        
-        // 編集画面を作成
-        function createEditInterface() {
-            multiDataEditContainer.innerHTML = '';
+        // 初期化関数
+        function init() {
+            console.log('初期化開始');
             
-            multipleData.forEach((data, index) => {
-                const editItem = document.createElement('div');
-                editItem.className = 'edit-data-item';
-                
-                const title = document.createElement('div');
-                title.className = 'edit-data-title';
-                title.textContent = `データ ${index + 1} - 打込: ${data.A || 0}`;
-                editItem.appendChild(title);
-                
-                const grid = document.createElement('div');
-                grid.className = 'edit-data-grid';
-                
-                const fields = [
-                    { key: 'X', label: '対象ゲーム' },
-                    { key: 'A', label: '打込' },
-                    { key: 'B', label: '2穴' },
-                    { key: 'C', label: 'リプレイ' },
-                    { key: 'D', label: 'リプV' },
-                    { key: 'E', label: '羽根拾' },
-                    { key: 'F', label: 'V入賞' },
-                    { key: 'G', label: 'SP' },
-                    { key: 'H', label: 'SP→V' },
-                    { key: 'I', label: '蹴り' },
-                    { key: 'J', label: '10R' },
-                    { key: 'K', label: '5R' },
-                    { key: 'L', label: '3R' }
-                ];
-                
-                fields.forEach(field => {
-                    const fieldDiv = document.createElement('div');
-                    fieldDiv.className = 'edit-data-field';
-                    
-                    const label = document.createElement('label');
-                    label.textContent = field.label;
-                    fieldDiv.appendChild(label);
-                    
-                    const input = document.createElement('input');
-                    input.type = 'number';
-                    input.value = data[field.key] || 0;
-                    input.setAttribute('data-field', field.key);
-                    input.setAttribute('data-index', index);
-                    
-                    // 入力時にデータを更新
-                    input.addEventListener('change', (e) => {
-                        const fieldKey = e.target.getAttribute('data-field');
-                        const dataIndex = parseInt(e.target.getAttribute('data-index'));
-                        if (multipleData[dataIndex]) {
-                            multipleData[dataIndex][fieldKey] = parseInt(e.target.value) || 0;
-                        }
-                    });
-                    
-                    fieldDiv.appendChild(input);
-                    grid.appendChild(fieldDiv);
-                });
-                
-                editItem.appendChild(grid);
-                multiDataEditContainer.appendChild(editItem);
-            });
-            
-            if (multipleData.length > 0) {
-                multiDataEditSection.style.display = 'block';
-            }
-        }
-        
-        // 複数ファイルの処理
-        async function processMultipleFiles(files) {
-            ocrStatus.textContent = `${files.length}枚の画像を処理中...`;
-            ocrStatus.className = 'ocr-status show loading';
-            uploadBtn.disabled = true;
-            multiUploadBtn.disabled = true;
-            
-            try {
-                for (let i = 0; i < files.length; i++) {
-                    ocrStatus.textContent = `処理中... (${i + 1}/${files.length})`;
-                    const data = await performOCRForMultiple(files[i]);
-                    if (data) {
-                        multipleData.push(data);
-                    }
-                }
-                
-                if (multipleData.length > 0) {
-                    // 打込順にソート
-                    multipleData.sort((a, b) => (a.A || 0) - (b.A || 0));
-                    
-                    // 編集インターフェースを作成
-                    createEditInterface();
-                    
-                    // 打込が最大のデータを選択
-                    const maxData = multipleData.reduce((max, current) => 
-                        ((current.A || 0) > (max.A || 0)) ? current : max
-                    );
-                    
-                    // フィールドに値を設定
-                    setFieldValues(maxData);
-                    
-                    ocrStatus.textContent = `✅ ${multipleData.length}枚の処理完了 - 最大打込: ${maxData.A}`;
-                    ocrStatus.className = 'ocr-status show success';
-                }
-            } catch (error) {
-                console.error('複数ファイル処理エラー:', error);
-                ocrStatus.textContent = '❌ 処理エラー';
-                ocrStatus.className = 'ocr-status show error';
-            } finally {
-                uploadBtn.disabled = false;
-                multiUploadBtn.disabled = false;
-            }
-        }
-        
-        // 複数選択用のOCR処理
-        async function performOCRForMultiple(file) {
-            try {
-                const base64 = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const base64String = reader.result.split(',')[1];
-                        resolve(base64String);
-                    };
-                    reader.readAsDataURL(file);
-                });
-                
-                const response = await fetch('/.netlify/functions/ocr', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ image: base64 })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                
-                // 構造化データから値を抽出
-                if (result.structuredData && result.structuredData.extractedValues) {
-                    return result.structuredData.extractedValues;
-                }
-                
-                return null;
-            } catch (error) {
-                console.error('OCRエラー:', error);
-                return null;
-            }
-        }
-        
-        // フィールドに値を設定
-        function setFieldValues(data) {
-            const fieldMapping = {
-                X: 'inputX',
-                A: 'inputA',
-                B: 'inputB',
-                C: 'inputC',
-                D: 'inputD',
-                E: 'inputE',
-                F: 'inputF',
-                G: 'inputG',
-                H: 'inputH',
-                I: 'inputI',
-                J: 'inputJ',
-                K: 'inputK',
-                L: 'inputL'
-            };
-            
-            for (const [field, inputId] of Object.entries(fieldMapping)) {
-                if (data[field] !== undefined) {
-                    const element = document.getElementById(inputId);
-                    if (element) {
-                        element.value = data[field];
-                    }
-                }
-            }
-        }
-        
-        // データテーブルの表示（時点データ）
-        function displayDataTable() {
-            if (multipleData.length === 0) return;
-            
-            // テーブルをクリア
-            dataTableBody.innerHTML = '';
-            
-            // 各データの計算結果を表示
-            multipleData.forEach(data => {
-                const row = calculateRowData(data);
-                const tr = document.createElement('tr');
-                
-                tr.innerHTML = `
-                    <td>${row.utikomi}</td>
-                    <td>${row.jackpotCount}</td>
-                    <td>${row.jackpotProb}</td>
-                    <td>${row.avgRound}</td>
-                    <td>${row.nakiPer}</td>
-                    <td>${row.pickupPer}</td>
-                    <td>${row.pickupRate}</td>
-                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
-                `;
-                
-                dataTableBody.appendChild(tr);
-            });
-            
-            dataTableSection.style.display = 'block';
-        }
-        
-        // 区間データテーブルの表示
-        function displayIntervalTable() {
-            if (multipleData.length < 2) return;
-            
-            // テーブルをクリア
-            intervalTableBody.innerHTML = '';
-            
-            // 区間データを計算
-            for (let i = 1; i < multipleData.length; i++) {
-                const prevData = multipleData[i - 1];
-                const currData = multipleData[i];
-                
-                // 区間の差分データを計算
-                const intervalData = {
-                    X: (currData.X || 0) - (prevData.X || 0),
-                    A: (currData.A || 0) - (prevData.A || 0),
-                    B: (currData.B || 0) - (prevData.B || 0),
-                    C: (currData.C || 0) - (prevData.C || 0),
-                    D: (currData.D || 0) - (prevData.D || 0),
-                    E: (currData.E || 0) - (prevData.E || 0),
-                    F: (currData.F || 0) - (prevData.F || 0),
-                    G: (currData.G || 0) - (prevData.G || 0),
-                    H: (currData.H || 0) - (prevData.H || 0),
-                    I: (currData.I || 0) - (prevData.I || 0),
-                    J: (currData.J || 0) - (prevData.J || 0),
-                    K: (currData.K || 0) - (prevData.K || 0),
-                    L: (currData.L || 0) - (prevData.L || 0)
-                };
-                
-                const row = calculateRowData(intervalData);
-                const tr = document.createElement('tr');
-                
-                const intervalLabel = `${prevData.A || 0}-${currData.A || 0}`;
-                
-                tr.innerHTML = `
-                    <td>${intervalLabel}</td>
-                    <td>${row.jackpotCount}</td>
-                    <td>${row.jackpotProb}</td>
-                    <td>${row.avgRound}</td>
-                    <td>${row.nakiPer}</td>
-                    <td>${row.pickupPer}</td>
-                    <td>${row.pickupRate}</td>
-                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
-                `;
-                
-                intervalTableBody.appendChild(tr);
-            }
-        }
-        
-        // 行データの計算
-        function calculateRowData(data) {
-            const jackpotCount = (data.J || 0) + (data.K || 0) + (data.L || 0);
-            const avgRound = jackpotCount > 0 ? 
-                ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2) / jackpotCount : 0;
-            const jackpotProb = jackpotCount > 0 ? 
-                '1/' + (data.X / jackpotCount).toFixed(1) : '-';
-            const nakiPer = data.A > 0 ? 
-                (data.X / (data.A / 2)).toFixed(1) : '-';
-            const pickupPer = data.A > 0 ? 
-                (data.E / (data.A / 2)).toFixed(1) : '-';
-            const pickupRate = data.X > 0 ? 
-                ((data.E / data.X) * 100).toFixed(1) + '%' : '-';
-            
-            // ヒキ計算
-            const roundHiki = ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2 - jackpotCount * 5) * 110;
-            const spHiki = ((data.H || 0) - ((data.G || 0) / 3)) * 550;
-            const repHiki = ((data.D || 0) - ((data.I || 0) / 25.2)) * 550;
-            const normHiki = ((data.F || 0) - ((data.I || 0) / 8.4)) * 550;
-            const totalHiki = roundHiki + spHiki + repHiki + normHiki;
-            
-            const hikiFormatted = formatHiki(totalHiki);
-            const hikiClass = totalHiki >= 0 ? 'positive' : 'negative';
-            
-            return {
-                utikomi: data.A || 0,
-                jackpotCount: jackpotCount,
-                jackpotProb: jackpotProb,
-                avgRound: avgRound.toFixed(1),
-                nakiPer: nakiPer,
-                pickupPer: pickupPer,
-                pickupRate: pickupRate,
-                hikiFormatted: hikiFormatted,
-                hikiClass: hikiClass,
-                totalHiki: totalHiki
-            };
-        }
-        
-currData.A || 0) - (prevData.A || 0),
-                    E: (currData.E || 0) - (prevData.E || 0),
-                    F: (currData.F || 0) - (prevData.F || 0),
-                    G: (currData.G || 0) - (prevData.G || 0),
-                    H: (currData.H || 0) - (prevData.H || 0),
-                    I: (currData.I || 0) - (prevData.I || 0),
-                    J: (currData.J || 0) - (prevData.J || 0),
-                    K: (currData.K || 0) - (prevData.K || 0),
-                    L: (currData.L || 0) - (prevData.L || 0),
-                    D: (currData.D || 0) - (prevData.D || 0)
-                };
-                
-                const row = calculateRowData(interval);
-                
-                // 大当確率の分母を抽出
-                let jackpotDenom = 40;
-                if (row.jackpotProb !== '-') {
-                    const parts = row.jackpotProb.split('/');
-                    if (parts.length === 2) {
-                        jackpotDenom = parseFloat(parts[1]);
-                    }
-                }
-                
-                intervalData.push({
-                    label: prevData.A || 0, // 区間の開始打込数
-                    utikomi: prevData.A || 0,
-                    jackpotDenom: jackpotDenom,
-                    avgRound: parseFloat(row.avgRound) || 0,
-                    nakiPer: parseFloat(row.nakiPer) || 0,
-                    pickupPer: parseFloat(row.pickupPer) || 0,
-                    pickupRate: parseFloat(row.pickupRate) || 0,
-                    totalHiki: row.totalHiki || 0
-                });
-            }
-            
-            // Chart.jsのデフォルト設定
-            Chart.defaults.color = '#888';
-            Chart.defaults.borderColor = '#333';
-            
-            // グラフ1: 大当確率の分母
-            const ctx1 = document.getElementById('chart1').getContext('2d');
-            const chart1 = new Chart(ctx1, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: '大当確率分母',
-                        data: intervalData.map(d => d.jackpotDenom),
-                        borderColor: '#4a90e2',
-                        backgroundColor: 'rgba(74, 144, 226, 0.1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: 10,
-                            max: 40,
-                            reverse: true,
-                            grid: { color: '#333' },
-                            ticks: {
-                                font: { size: 10 },
-                                callback: function(value) {
-                                    return '1/' + value.toFixed(0);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-            charts.push(chart1);
-            
-            // グラフ2: 平均R
-            const ctx2 = document.getElementById('chart2').getContext('2d');
-            const chart2 = new Chart(ctx2, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: '平均R',
-                        data: intervalData.map(d => d.avgRound),
-                        borderColor: '#f5a623',
-                        backgroundColor: 'rgba(245, 166, 35, 0.1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: 3,
-                            max: 10,
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } }
-                        }
-                    }
-                }
-            });
-            charts.push(chart2);
-            
-            // グラフ3: ナキ/千
-            const ctx3 = document.getElementById('chart3').getContext('2d');
-            const chart3 = new Chart(ctx3, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: 'ナキ/千',
-                        data: intervalData.map(d => d.nakiPer),
-                        borderColor: '#50e3c2',
-                        backgroundColor: 'rgba(80, 227, 194, 0.1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: 6,
-                            max: 20,
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } }
-                        }
-                    }
-                }
-            });
-            charts.push(chart3);
-            
-            // グラフ4: 拾い/千
-            const ctx4 = document.getElementById('chart4').getContext('2d');
-            const chart4 = new Chart(ctx4, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: '拾い/千',
-                        data: intervalData.map(d => d.pickupPer),
-                        borderColor: '#b8e986',
-                        backgroundColor: 'rgba(184, 233, 134, 0.1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: 3,
-                            max: 10,
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } }
-                        }
-                    }
-                }
-            });
-            charts.push(chart4);
-            
-            // グラフ5: 拾球率
-            const ctx5 = document.getElementById('chart5').getContext('2d');
-            const chart5 = new Chart(ctx5, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: '拾球率',
-                        data: intervalData.map(d => d.pickupRate),
-                        borderColor: '#ff6b6b',
-                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: 25,
-                            max: 80,
-                            grid: { color: '#333' },
-                            ticks: {
-                                font: { size: 10 },
-                                callback: function(value) {
-                                    return value + '%';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-            charts.push(chart5);
-            
-            // グラフ6: ヒキの多寡
-            const ctx6 = document.getElementById('chart6').getContext('2d');
-            const maxHiki = Math.max(...intervalData.map(d => Math.abs(d.totalHiki)), 5000);
-            const chart6 = new Chart(ctx6, {
-                type: 'line',
-                data: {
-                    labels: intervalData.map(d => d.label),
-                    datasets: [{
-                        label: 'ヒキの多寡',
-                        data: intervalData.map(d => d.totalHiki),
-                        borderColor: '#9333ea',
-                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                        segment: {
-                            borderColor: function(ctx) {
-                                if (ctx.p0 && ctx.p0.parsed) {
-                                    return ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171';
-                                }
-                                return '#9333ea';
-                            }
-                        },
-                        tension: 0.3,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: { font: { size: 10 } },
-                            title: {
-                                display: true,
-                                text: '打込',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            min: -maxHiki,
-                            max: maxHiki,
-                            grid: { 
-                                color: function(context) {
-                                    if (context.tick.value === 0) {
-                                        return '#666';
-                                    }
-                                    return '#333';
-                                }
-                            },
-                            ticks: {
-                                font: { size: 10 },
-                                callback: function(value) {
-                                    return (value >= 0 ? '+' : '') + value.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-            charts.push(chart6);
-        }
+            // 要素取得
+            const fileInput = document.getElementById('fileInput');
+            const multiFileInput =
