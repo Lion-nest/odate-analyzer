@@ -921,8 +921,17 @@
         });
         
         // イベント設定
-        uploadBtn.addEventListener('click', () => fileInput.click());
-        multiUploadBtn.addEventListener('click', () => multiFileInput.click());
+        uploadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('Upload button clicked');
+            fileInput.click();
+        });
+        
+        multiUploadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('Multi upload button clicked');
+            multiFileInput.click();
+        });
         
         editToggleBtn.addEventListener('click', () => {
             multiDataEditContainer.classList.toggle('show');
