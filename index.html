@@ -301,11 +301,32 @@
                 title.textContent = `データ ${index + 1} - 打込: ${data.A || 0}`;
                 editItem.appendChild(title);
                 
+                // 対象ゲーム数（単独の長い入力欄）
+                const singleDiv = document.createElement('div');
+                singleDiv.className = 'edit-data-single';
+                
+                const singleField = document.createElement('div');
+                singleField.className = 'edit-data-field';
+                
+                const singleLabel = document.createElement('label');
+                singleLabel.textContent = '対象ゲーム数';
+                singleField.appendChild(singleLabel);
+                
+                const singleInput = document.createElement('input');
+                singleInput.type = 'number';
+                singleInput.value = data.X || 0;
+                singleInput.setAttribute('data-field', 'X');
+                singleInput.setAttribute('data-index', index);
+                
+                singleField.appendChild(singleInput);
+                singleDiv.appendChild(singleField);
+                editItem.appendChild(singleDiv);
+                
+                // 残りの12項目（4×3グリッド）
                 const grid = document.createElement('div');
                 grid.className = 'edit-data-grid';
                 
                 const fields = [
-                    { key: 'X', label: '対象ゲーム' },
                     { key: 'A', label: '打込' },
                     { key: 'B', label: '2穴' },
                     { key: 'C', label: 'リプレイ' },
@@ -1246,6 +1267,15 @@
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
+            margin-top: 8px;
+        }
+        
+        .edit-data-single {
+            margin-bottom: 8px;
+        }
+        
+        .edit-data-single .edit-data-field {
+            width: 100%;
         }
         
         .edit-data-field {
