@@ -76,13 +76,15 @@
             
             // ナキ・拾い推定ページの処理
             nakiHiroiBtn.addEventListener('click', () => {
-                document.querySelector('.container').style.display = 'none';
+                console.log('ナキ・拾いボタンクリック');
+                document.getElementById('mainContainer').style.display = 'none';
                 document.getElementById('nakiHiroiPage').style.display = 'block';
             });
             
             backToTopBtn.addEventListener('click', () => {
+                console.log('TOPに戻るボタンクリック');
                 document.getElementById('nakiHiroiPage').style.display = 'none';
-                document.querySelector('.container').style.display = 'block';
+                document.getElementById('mainContainer').style.display = 'block';
             });
             
             // 日付入力の自動フォーマット
@@ -1652,7 +1654,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="mainContainer">
         <h1>🐷 おだて豚 データ解析 v68</h1>
         
         <div class="section">
@@ -1675,8 +1677,9 @@
             </div>
         
         <!-- ナキ・拾い推定ページ -->
-        <div class="naki-hiroi-page" id="nakiHiroiPage" style="display: none;">
-            <h1>📊 ナキ・拾い推定</h1>
+        <div class="naki-hiroi-page" id="nakiHiroiPage" style="display: none; background: #0a0a0a; min-height: 100vh;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 10px;">
+                <h1 style="font-size: 20px; text-align: center; margin-bottom: 15px; font-weight: bold; color: #fff;">📊 ナキ・拾い推定</h1>
             
             <div class="section">
                 <button class="btn btn-primary" id="nakiCalcBtn" style="width: 100%; margin-bottom: 15px;">計算する</button>
@@ -1835,6 +1838,7 @@
                 </div>
                 
                 <button class="btn btn-secondary" id="backToTopBtn" style="width: 100%; margin-top: 15px;">TOPに戻る</button>
+            </div>
             </div>
         </div>
             
