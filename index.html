@@ -84,19 +84,45 @@
             
             // ナキ・拾い推定ページの処理
             if (nakiHiroiBtn) {
-                nakiHiroiBtn.addEventListener('click', () => {
+                nakiHiroiBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     console.log('ナキ・拾いボタンクリック');
-                    const mainContainer = document.getElementById('mainContainer');
-                    const nakiPage = document.getElementById('nakiHiroiPage');
                     
-                    if (mainContainer && nakiPage) {
-                        mainContainer.style.display = 'none';
-                        nakiPage.style.display = 'block';
-                        console.log('ページ切替完了');
-                    } else {
-                        console.error('ページ要素が見つかりません', {mainContainer, nakiPage});
+                    try {
+                        const mainContainer = document.getElementById('mainContainer');
+                        const nakiPage = document.getElementById('nakiHiroiPage');
+                        
+                        console.log('要素確認:', {
+                            mainContainer: mainContainer,
+                            nakiPage: nakiPage,
+                            mainDisplay: mainContainer?.style.display,
+                            nakiDisplay: nakiPage?.style.display
+                        });
+                        
+                        if (mainContainer) {
+                            mainContainer.style.display = 'none';
+                            console.log('メインコンテナを非表示にしました');
+                        }
+                        
+                        if (nakiPage) {
+                            nakiPage.style.display = 'block';
+                            console.log('ナキページを表示しました');
+                        }
+                        
+                        // 強制的に表示を確認
+                        setTimeout(() => {
+                            console.log('表示状態確認:', {
+                                mainDisplay: mainContainer?.style.display,
+                                nakiDisplay: nakiPage?.style.display
+                            });
+                        }, 100);
+                        
+                    } catch (error) {
+                        console.error('エラー発生:', error);
                     }
                 });
+            } else {
+                console.error('nakiHiroiBtnが見つかりません');
             }
             
             if (backToTopBtn) {
