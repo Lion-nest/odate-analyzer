@@ -19,6 +19,12 @@
             
             console.log('要素取得完了', {fileInput, multiFileInput, calcBtn, resetBtn, nakiHiroiBtn});
             
+            // ナキ・拾い推定ボタンの確認
+            if (!nakiHiroiBtn) {
+                console.error('nakiHiroiBtnが見つかりません');
+                return;
+            }
+            
             // フォーカス時に全選択
             const inputs = document.querySelectorAll('input[type="number"]');
             inputs.forEach(input => {
@@ -64,56 +70,51 @@
             
             resetBtn.addEventListener('click', () => location.reload());
             
-            editToggleBtn.addEventListener('click', () => {
-                const container = document.getElementById('multiDataEditContainer');
-                container.classList.toggle('show');
-                if (container.classList.contains('show')) {
-                    editToggleBtn.textContent = '📝 読み取りデータを閉じる';
-                } else {
-                    editToggleBtn.textContent = '📝 読み取りデータの確認・修正';
-                }
-            });
+            if (editToggleBtn) {
+                editToggleBtn.addEventListener('click', () => {
+                    const container = document.getElementById('multiDataEditContainer');
+                    container.classList.toggle('show');
+                    if (container.classList.contains('show')) {
+                        editToggleBtn.textContent = '📝 読み取りデータを閉じる';
+                    } else {
+                        editToggleBtn.textContent = '📝 読み取りデータの確認・修正';
+                    }
+                });
+            }
             
             // ナキ・拾い推定ページの処理
-            nakiHiroiBtn.addEventListener('click', () => {
-                console.log('ナキ・拾いボタンクリック');
-                document.getElementById('mainContainer').style.display = 'none';
-                document.getElementById('nakiHiroiPage').style.display = 'block';
-            });
-            
-            backToTopBtn.addEventListener('click', () => {
-                console.log('TOPに戻るボタンクリック');
-                document.getElementById('nakiHiroiPage').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-            });
-            
-            // 日付入力の自動フォーマット
-            document.querySelectorAll('.date-input').forEach(input => {
-                input.addEventListener('blur', function() {
-                    const value = this.value;
-                    if (value && value.includes('/')) {
-                        const parts = value.split('/');
-                        if (parts.length === 2) {
-                            const month = parts[0].padStart(2, '0');
-                            const day = parts[1].padStart(2, '0');
-                            this.value = `25/${month}/${day}`;
-                        }
+            if (nakiHiroiBtn) {
+                nakiHiroiBtn.addEventListener('click', () => {
+                    console.log('ナキ・拾いボタンクリック');
+                    const mainContainer = document.getElementById('mainContainer');
+                    const nakiPage = document.getElementById('nakiHiroiPage');
+                    
+                    if (mainContainer && nakiPage) {
+                        mainContainer.style.display = 'none';
+                        nakiPage.style.display = 'block';
+                        console.log('ページ切替完了');
+                    } else {
+                        console.error('ページ要素が見つかりません', {mainContainer, nakiPage});
                     }
                 });
-            });
+            }
             
-            // 差玉の符号処理
-            document.querySelectorAll('.sagidama').forEach(input => {
-                input.addEventListener('blur', function() {
-                    const value = parseInt(this.value) || 0;
-                    if (value !== 0) {
-                        this.value = (value > 0 ? '+' : '') + value;
+            if (backToTopBtn) {
+                backToTopBtn.addEventListener('click', () => {
+                    console.log('TOPに戻るボタンクリック');
+                    const mainContainer = document.getElementById('mainContainer');
+                    const nakiPage = document.getElementById('nakiHiroiPage');
+                    
+                    if (mainContainer && nakiPage) {
+                        nakiPage.style.display = 'none';
+                        mainContainer.style.display = 'block';
                     }
                 });
-            });
+            }
             
             // ナキ・拾い計算
-            nakiCalcBtn.addEventListener('click', () => {
+            if (nakiCalcBtn) {
+                nakiCalcBtn.addEventListener('click', () => {
                 const rows = document.querySelectorAll('.input-row');
                 const bantaiHeaders = document.querySelectorAll('.bantai-1, .bantai-2, .bantai-3, .bantai-4, .bantai-5');
                 
@@ -177,6 +178,32 @@
                             const hiroiCell = document.querySelector(`.hiroi-${index + 1}-${i}`);
                             if (hiroiCell) hiroiCell.textContent = '-';
                         }
+                    }
+                });
+            });
+            }
+            
+            // 日付入力の自動フォーマット
+            document.querySelectorAll('.date-input').forEach(input => {
+                input.addEventListener('blur', function() {
+                    const value = this.value;
+                    if (value && value.includes('/')) {
+                        const parts = value.split('/');
+                        if (parts.length === 2) {
+                            const month = parts[0].padStart(2, '0');
+                            const day = parts[1].padStart(2, '0');
+                            this.value = `25/${month}/${day}`;
+                        }
+                    }
+                });
+            });
+            
+            // 差玉の符号処理
+            document.querySelectorAll('.sagidama').forEach(input => {
+                input.addEventListener('blur', function() {
+                    const value = parseInt(this.value) || 0;
+                    if (value !== 0) {
+                        this.value = (value > 0 ? '+' : '') + value;
                     }
                 });
             });
