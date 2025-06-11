@@ -1,7 +1,908 @@
 <!DOCTYPE html>
 
 <html lang="ja">
-<pleData = [];
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おだて豚 データ解析ツール v68</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+```
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0a0a0a;
+        color: #fff;
+        padding: 10px;
+        min-height: 100vh;
+    }
+    
+    .container {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    h1 {
+        font-size: 20px;
+        text-align: center;
+        margin-bottom: 15px;
+        font-weight: bold;
+    }
+    
+    .section {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border: 1px solid #333;
+    }
+    
+    .upload-btn {
+        width: 100%;
+        padding: 15px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    
+    .upload-btn.green {
+        background: #28a745;
+    }
+    
+    .upload-btn:active {
+        transform: scale(0.98);
+    }
+    
+    .upload-btn:disabled {
+        background: #666;
+        cursor: not-allowed;
+    }
+    
+    .ocr-status {
+        background: #2a2a2a;
+        padding: 8px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        text-align: center;
+        font-size: 13px;
+        color: #888;
+        display: none;
+    }
+    
+    .ocr-status.show {
+        display: block;
+    }
+    
+    .ocr-status.loading {
+        color: #ffa500;
+    }
+    
+    .ocr-status.success {
+        color: #4ade80;
+        background: #1a3a1a;
+    }
+    
+    .ocr-status.error {
+        color: #f87171;
+        background: #3a1a1a;
+    }
+    
+    .notice {
+        background: #2a2a2a;
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        font-size: 12px;
+        color: #888;
+        text-align: center;
+    }
+    
+    .input-section {
+        margin-bottom: 15px;
+    }
+    
+    .input-single {
+        margin-bottom: 10px;
+    }
+    
+    .input-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin: 10px 0;
+    }
+    
+    .input-item {
+        text-align: center;
+    }
+    
+    .input-item label {
+        font-size: 11px;
+        color: #888;
+        display: block;
+        margin-bottom: 3px;
+    }
+    
+    .input-item input {
+        width: 100%;
+        padding: 6px;
+        border: 1px solid #444;
+        background: #0a0a0a;
+        color: #fff;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 14px;
+    }
+    
+    .input-item input:focus {
+        outline: none;
+        border-color: #007bff;
+        background: #1a1a1a;
+    }
+    
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .result-section {
+        display: none;
+    }
+    
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #333;
+    }
+    
+    .result-title {
+        font-size: 18px;
+        font-weight: bold;
+    }
+    
+    .screenshot-hint {
+        font-size: 10px;
+        color: #666;
+    }
+    
+    .result-group {
+        background: rgba(255, 255, 255, 0.03);
+        padding: 10px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+    }
+    
+    .result-group.jackpot {
+        background: rgba(74, 144, 226, 0.1);
+    }
+    
+    .result-group.stats {
+        background: rgba(34, 197, 94, 0.1);
+        padding: 8px;
+    }
+    
+    .result-group.yakumono {
+        background: rgba(251, 146, 60, 0.1);
+        padding: 8px;
+    }
+    
+    .result-group.hiki {
+        background: rgba(147, 51, 234, 0.1);
+        padding: 8px;
+    }
+    
+    .result-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    
+    .result-row:last-child {
+        margin-bottom: 0;
+    }
+    
+    .result-group:not(.jackpot) .result-row {
+        margin-bottom: 6px;
+    }
+    
+    .result-item {
+        text-align: center;
+        flex: 1;
+    }
+    
+    .result-label {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 3px;
+    }
+    
+    .result-group:not(.jackpot) .result-label {
+        font-size: 10px;
+        margin-bottom: 2px;
+    }
+    
+    .result-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #fff;
+    }
+    
+    .result-group:not(.jackpot) .result-value {
+        font-size: 16px;
+    }
+    
+    .result-value.large {
+        font-size: 22px;
+    }
+    
+    /* 単位のスタイル */
+    .unit {
+        font-size: 14px;
+        color: #888;
+        margin-left: 2px;
+        font-weight: normal;
+    }
+    
+    .result-value.large .unit {
+        font-size: 14px;
+    }
+    
+    .result-group:not(.jackpot) .unit {
+        font-size: 12px;
+    }
+    
+    /* R振分のスタイル */
+    .r-dist {
+        font-size: 14px;
+    }
+    
+    .r-dist .value {
+        font-size: 16px;
+        font-weight: bold;
+        margin: 0 1px;
+    }
+    
+    .r-label-10r {
+        font-size: 10px;
+        color: #a04040;
+        margin-right: 1px;
+        font-weight: normal;
+    }
+    
+    .r-label-5r {
+        font-size: 10px;
+        color: #a06030;
+        margin-right: 1px;
+        font-weight: normal;
+    }
+    
+    .r-label-3r {
+        font-size: 10px;
+        color: #4080a0;
+        margin-right: 1px;
+        font-weight: normal;
+    }
+    
+    /* ヒキの色 */
+    .positive {
+        color: #4ade80;
+    }
+    
+    .negative {
+        color: #f87171;
+    }
+    
+    .hiki-total {
+        background: rgba(30, 41, 59, 0.5);
+        padding: 10px;
+        border-radius: 6px;
+        text-align: center;
+        margin-bottom: 8px;
+        border: 1px solid #334155;
+    }
+    
+    .hiki-total .result-value {
+        font-size: 20px;
+    }
+    
+    .loading {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,.2);
+        border-radius: 50%;
+        border-top-color: #007bff;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 6px;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    .debug-mode {
+        display: none;
+        background: #2a2a2a;
+        padding: 10px;
+        margin-top: 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .debug-mode.show {
+        display: block;
+    }
+    
+    /* 複数データ編集セクション */
+    .multi-data-edit-section {
+        display: none;
+        margin-top: 15px;
+    }
+    
+    .edit-toggle-btn {
+        width: 100%;
+        padding: 10px;
+        background: #495057;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+    
+    .edit-toggle-btn:hover {
+        background: #5a6268;
+    }
+    
+    .multi-data-edit-container {
+        display: none;
+        background: #2a2a2a;
+        border-radius: 6px;
+        padding: 10px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .multi-data-edit-container.show {
+        display: block;
+    }
+    
+    .edit-data-item {
+        background: #1a1a1a;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border: 1px solid #444;
+    }
+    
+    .edit-data-title {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #4a90e2;
+    }
+    
+    .edit-data-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        margin-top: 8px;
+    }
+    
+    .edit-data-single {
+        margin-bottom: 8px;
+    }
+    
+    .edit-data-single .edit-data-field {
+        width: 100%;
+    }
+    
+    .edit-data-field {
+        text-align: center;
+    }
+    
+    .edit-data-field label {
+        font-size: 10px;
+        color: #888;
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    .edit-data-field input {
+        width: 100%;
+        padding: 4px;
+        border: 1px solid #444;
+        background: #0a0a0a;
+        color: #fff;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 12px;
+    }
+    
+    /* 複数データ表のスタイル */
+    .data-table-section {
+        display: none;
+        margin-top: 20px;
+    }
+    
+    .data-table-container {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 15px;
+        overflow-x: auto;
+        margin-bottom: 15px;
+    }
+    
+    .data-table-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        border: 1px solid #444;
+        padding: 6px;
+        text-align: center;
+    }
+    
+    .data-table th {
+        background: #2a2a2a;
+        color: #aaa;
+        font-weight: bold;
+    }
+    
+    .data-table td {
+        background: #0a0a0a;
+    }
+    
+    .data-table tr:hover td {
+        background: #1a1a1a;
+    }
+    
+    .data-table .positive {
+        color: #4ade80;
+    }
+    
+    .data-table .negative {
+        color: #f87171;
+    }
+    
+    /* グラフセクションのスタイル */
+    .graph-section {
+        display: none;
+        margin-top: 20px;
+    }
+    
+    .graph-container {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .graph-title {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        text-align: center;
+        color: #fff;
+    }
+    
+    .chart-wrapper {
+        position: relative;
+        height: 150px;
+        margin: 0 auto;
+    }
+    
+    .chart-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+    
+    .chart-grid .graph-container {
+        margin-bottom: 0;
+    }
+    
+    .chart-grid .chart-wrapper {
+        height: 120px;
+    }
+    
+    canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+```
+
+</head>
+<body>
+    <div class="container">
+        <h1>🐷 おだて豚 データ解析 v68</h1>
+
+```
+    <div class="section">
+        <label for="fileInput" class="upload-btn" style="display: block; text-align: center;">
+            📸 スクショを選択
+        </label>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        
+        <label for="multiFileInput" class="upload-btn green" style="display: block; text-align: center;">
+            📸 スクショ連続選択
+        </label>
+        <input type="file" id="multiFileInput" accept="image/*" multiple style="display: none;">
+        
+        <div class="ocr-status" id="ocrStatus">
+            読み取り待機中...
+        </div>
+        
+        <div class="notice">
+            ※読み取りが不正確な場合は手動で修正してください
+        </div>
+        
+        <div class="input-section">
+            <div class="input-single">
+                <div class="input-item">
+                    <label>対象ゲーム数</label>
+                    <input type="number" id="inputX" inputmode="numeric" pattern="[0-9]*">
+                </div>
+            </div>
+            
+            <div class="input-grid">
+                <div class="input-item">
+                    <label>打込</label>
+                    <input type="number" id="inputA" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>2穴</label>
+                    <input type="number" id="inputB" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>リプレイ</label>
+                    <input type="number" id="inputC" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>リプV</label>
+                    <input type="number" id="inputD" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>羽根拾</label>
+                    <input type="number" id="inputE" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>V入賞</label>
+                    <input type="number" id="inputF" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>SP</label>
+                    <input type="number" id="inputG" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>SP→V</label>
+                    <input type="number" id="inputH" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>蹴り</label>
+                    <input type="number" id="inputI" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>10R</label>
+                    <input type="number" id="inputJ" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>5R</label>
+                    <input type="number" id="inputK" inputmode="numeric" pattern="[0-9]*">
+                </div>
+                <div class="input-item">
+                    <label>3R</label>
+                    <input type="number" id="inputL" inputmode="numeric" pattern="[0-9]*">
+                </div>
+            </div>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn btn-primary" id="calcBtn">計算</button>
+            <button class="btn btn-secondary" id="resetBtn">リセット</button>
+        </div>
+        
+        <div class="multi-data-edit-section" id="multiDataEditSection">
+            <button class="edit-toggle-btn" id="editToggleBtn">📝 読み取りデータの確認・修正</button>
+            <div class="multi-data-edit-container" id="multiDataEditContainer"></div>
+        </div>
+        
+        <div class="debug-mode" id="debugMode"></div>
+    </div>
+    
+    <div class="section result-section" id="resultSection">
+        <div class="result-header">
+            <div class="result-title">打込 <span id="resultA">100</span></div>
+            <div class="screenshot-hint">📱 スクショ推奨</div>
+        </div>
+        
+        <div class="result-group jackpot">
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">大当</div>
+                    <div class="result-value large">
+                        <span id="jackpotCount">-</span>
+                        <span class="unit">回</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">大当り確率</div>
+                    <div class="result-value" id="jackpotProb">-</div>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">R振分</div>
+                    <div class="result-value r-dist">
+                        <span class="r-label-10r">10R</span><span class="value" id="jCount">-</span>
+                        <span style="margin: 0 2px;"></span>
+                        <span class="r-label-5r">5R</span><span class="value" id="kCount">-</span>
+                        <span style="margin: 0 2px;"></span>
+                        <span class="r-label-3r">3R</span><span class="value" id="lCount">-</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">平均R</div>
+                    <div class="result-value" id="avgRound">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="result-group stats">
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">総ナキ数</div>
+                    <div class="result-value">
+                        <span id="totalNaki">-</span>
+                        <span class="unit">回</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">ナキ/千</div>
+                    <div class="result-value">
+                        <span id="nakiPer">-</span>
+                        <span class="unit">回/千</span>
+                    </div>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">総拾い個数</div>
+                    <div class="result-value">
+                        <span id="totalPickup">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">拾い/千</div>
+                    <div class="result-value">
+                        <span id="pickupPer">-</span>
+                        <span class="unit">個/千</span>
+                    </div>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">拾球率</div>
+                    <div class="result-value" id="pickupRate">-</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">役物確率</div>
+                    <div class="result-value" id="yakumonoProb">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="result-group yakumono">
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">蹴り率</div>
+                    <div class="result-value" id="kickRate">-</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">SP発展率</div>
+                    <div class="result-value" id="spRate">-</div>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">SP成功率</div>
+                    <div class="result-value" id="spSuccess">-</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">リプレイ成功率</div>
+                    <div class="result-value" id="replaySuccess">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="result-group hiki">
+            <div class="hiki-total">
+                <div class="result-label">期待差玉からのヒキの多寡</div>
+                <div class="result-value">
+                    <span id="totalHiki" class="hiki-value">-</span>
+                    <span class="unit">個</span>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">Rのヒキ</div>
+                    <div class="result-value">
+                        <span id="rHiki" class="hiki-value">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">SPルートのヒキ</div>
+                    <div class="result-value">
+                        <span id="spHiki" class="hiki-value">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+            </div>
+            <div class="result-row">
+                <div class="result-item">
+                    <div class="result-label">通-リプレイのヒキ</div>
+                    <div class="result-value">
+                        <span id="repHiki" class="hiki-value">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">通常ルートのヒキ</div>
+                    <div class="result-value">
+                        <span id="normHiki" class="hiki-value">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section data-table-section" id="dataTableSection">
+        <div class="data-table-container">
+            <div class="data-table-title">📊 時点データ表</div>
+            <table class="data-table" id="dataTable">
+                <thead>
+                    <tr>
+                        <th>打込</th>
+                        <th>大当<br>回数</th>
+                        <th>大当<br>確率</th>
+                        <th>平均R</th>
+                        <th>ナキ/<br>千</th>
+                        <th>拾い/<br>千</th>
+                        <th>拾球率</th>
+                        <th>ヒキ多寡</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="data-table-container">
+            <div class="data-table-title">📊 区間データ表</div>
+            <table class="data-table" id="intervalTable">
+                <thead>
+                    <tr>
+                        <th>区間</th>
+                        <th>大当<br>回数</th>
+                        <th>大当<br>確率</th>
+                        <th>平均R</th>
+                        <th>ナキ/<br>千</th>
+                        <th>拾い/<br>千</th>
+                        <th>拾球率</th>
+                        <th>ヒキ多寡</th>
+                    </tr>
+                </thead>
+                <tbody id="intervalTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="section graph-section" id="graphSection">
+        <div class="graph-container">
+            <div class="graph-title">📈 区間データ推移グラフ</div>
+            <div class="chart-grid">
+                <div class="graph-container">
+                    <div class="graph-title">①大当確率の分母</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart1"></canvas>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-title">②平均R</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart2"></canvas>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-title">③ナキ/千</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart3"></canvas>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-title">④拾い/千</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart4"></canvas>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-title">⑤拾球率</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart5"></canvas>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-title">⑥ヒキの多寡</div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart6"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // グローバル変数
+    let multipleData = [];
     let charts = [];
     
     // 初期化関数
