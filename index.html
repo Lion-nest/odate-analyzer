@@ -3,6 +3,33 @@
         let multipleData = [];
         let charts = [];
         
+        // ページ切り替え関数（グローバル）
+        function showNakiHiroiPage() {
+            console.log('showNakiHiroiPage called');
+            const mainContainer = document.getElementById('mainContainer');
+            const nakiPage = document.getElementById('nakiHiroiPage');
+            
+            if (mainContainer) {
+                mainContainer.style.display = 'none';
+            }
+            if (nakiPage) {
+                nakiPage.style.display = 'block';
+            }
+        }
+        
+        function showMainPage() {
+            console.log('showMainPage called');
+            const mainContainer = document.getElementById('mainContainer');
+            const nakiPage = document.getElementById('nakiHiroiPage');
+            
+            if (nakiPage) {
+                nakiPage.style.display = 'none';
+            }
+            if (mainContainer) {
+                mainContainer.style.display = 'block';
+            }
+        }
+        
         // 初期化関数
         function init() {
             console.log('初期化開始');
@@ -1730,12 +1757,13 @@
         </div>
     
     <!-- ナキ・拾い推定ページ -->
-    <div class="naki-hiroi-page" id="nakiHiroiPage" style="display: none; background: #0a0a0a; color: #fff; min-height: 100vh; padding: 10px;">
-        <div style="max-width: 600px; margin: 0 auto;">
-            <h1 style="font-size: 20px; text-align: center; margin-bottom: 15px; font-weight: bold; color: #fff;">📊 ナキ・拾い推定</h1>
-            
-            <div class="section">
-                <button class="btn btn-primary" id="nakiCalcBtn" style="width: 100%; margin-bottom: 15px;">計算する</button>
+    <div id="nakiHiroiPage" style="display: none;">
+        <div style="background: #0a0a0a; color: #fff; min-height: 100vh; padding: 10px;">
+            <div style="max-width: 600px; margin: 0 auto;">
+                <h1 style="font-size: 20px; text-align: center; margin-bottom: 15px; font-weight: bold; color: #fff;">📊 ナキ・拾い推定</h1>
+                
+                <div class="section">
+                    <button class="btn btn-primary" id="nakiCalcBtn" style="width: 100%; margin-bottom: 15px;">計算する</button>
                 
                 <div class="naki-table-container">
                     <table class="naki-table">
@@ -1892,7 +1920,7 @@
                 
                 </div>
                 
-                <button class="btn btn-secondary" id="backToTopBtn" style="width: 100%; margin-top: 15px;">TOPに戻る</button>
+                <button class="btn btn-secondary" id="backToTopBtn" style="width: 100%; margin-top: 15px;" onclick="showMainPage()">TOPに戻る</button>
             </div>
         </div>
             
