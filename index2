@@ -1,0 +1,2276 @@
+<script>
+        // グローバル変数
+        let multipleData = [];
+        let charts = [];
+        
+        // ページ切り替え関数（グローバル）
+        function showNakiHiroiPage() {
+            console.log('showNakiHiroiPage called');
+            const mainContainer = document.getElementById('mainContainer');
+            const nakiPage = document.getElementById('nakiHiroiPage');
+            
+            if (mainContainer) {
+                mainContainer.style.display = 'none';
+            }
+            if (nakiPage) {
+                nakiPage.style.display = 'block';
+            }
+        }
+        
+        function showMainPage() {
+            console.log('showMainPage called');
+            const mainContainer = document.getElementById('mainContainer');
+            const nakiPage = document.getElementById('nakiHiroiPage');
+            
+            if (nakiPage) {
+                nakiPage.style.display = 'none';
+            }
+            if (mainContainer) {
+                mainContainer.style.display = 'block';
+            }
+        }
+        
+        // 初期化関数
+        function init() {
+            console.log('初期化開始');
+            
+            // 要素取得
+            const fileInput = document.getElementById('fileInput');
+            const multiFileInput = document.getElementById('multiFileInput');
+            const calcBtn = document.getElementById('calcBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const editToggleBtn = document.getElementById('editToggleBtn');
+            const nakiHiroiBtn = document.getElementById('nakiHiroiBtn');
+            const nakiCalcBtn = document.getElementById('nakiCalcBtn');
+            const backToTopBtn = document.getElementById('backToTopBtn');
+            
+            console.log('要素取得完了', {fileInput, multiFileInput, calcBtn, resetBtn, nakiHiroiBtn});
+            
+            // ナキ・拾い推定ボタンの確認
+            if (!nakiHiroiBtn) {
+                console.error('nakiHiroiBtnが見つかりません');
+                return;
+            }
+            
+            // フォーカス時に全選択
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.select();
+                });
+            });
+            
+            // ファイル選択イベント
+            fileInput.addEventListener('change', (e) => {
+                console.log('ファイル選択');
+                const file = e.target.files[0];
+                if (file) {
+                    multipleData = [];
+                    document.getElementById('dataTableSection').style.display = 'none';
+                    document.getElementById('graphSection').style.display = 'none';
+                    document.getElementById('multiDataEditSection').style.display = 'none';
+                    performOCR(file);
+                }
+            });
+            
+            multiFileInput.addEventListener('change', async (e) => {
+                console.log('複数ファイル選択');
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                    multipleData = [];
+                    await processMultipleFiles(files);
+                }
+            });
+            
+            // ボタンイベント
+            calcBtn.addEventListener('click', () => {
+                if (multipleData.length > 0) {
+                    updateMultipleDataFromEdit();
+                }
+                calculate();
+                if (multipleData.length > 1) {
+                    displayDataTable();
+                    displayIntervalTable();
+                    displayGraphs();
+                }
+            });
+            
+            resetBtn.addEventListener('click', () => location.reload());
+            
+            if (editToggleBtn) {
+                editToggleBtn.addEventListener('click', () => {
+                    const container = document.getElementById('multiDataEditContainer');
+                    container.classList.toggle('show');
+                    if (container.classList.contains('show')) {
+                        editToggleBtn.textContent = '📝 読み取りデータを閉じる';
+                    } else {
+                        editToggleBtn.textContent = '📝 読み取りデータの確認・修正';
+                    }
+                });
+            }
+            
+            // ナキ・拾い推定ページの処理
+            if (nakiHiroiBtn) {
+                nakiHiroiBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('ナキ・拾いボタンクリック');
+                    
+                    try {
+                        const mainContainer = document.getElementById('mainContainer');
+                        const nakiPage = document.getElementById('nakiHiroiPage');
+                        
+                        console.log('要素確認:', {
+                            mainContainer: mainContainer,
+                            nakiPage: nakiPage,
+                            mainDisplay: mainContainer?.style.display,
+                            nakiDisplay: nakiPage?.style.display
+                        });
+                        
+                        if (mainContainer) {
+                            mainContainer.style.display = 'none';
+                            console.log('メインコンテナを非表示にしました');
+                        }
+                        
+                        if (nakiPage) {
+                            nakiPage.style.display = 'block';
+                            console.log('ナキページを表示しました');
+                        }
+                        
+                        // 強制的に表示を確認
+                        setTimeout(() => {
+                            console.log('表示状態確認:', {
+                                mainDisplay: mainContainer?.style.display,
+                                nakiDisplay: nakiPage?.style.display
+                            });
+                        }, 100);
+                        
+                    } catch (error) {
+                        console.error('エラー発生:', error);
+                    }
+                });
+            } else {
+                console.error('nakiHiroiBtnが見つかりません');
+            }
+            
+            if (backToTopBtn) {
+                backToTopBtn.addEventListener('click', () => {
+                    console.log('TOPに戻るボタンクリック');
+                    const mainContainer = document.getElementById('mainContainer');
+                    const nakiPage = document.getElementById('nakiHiroiPage');
+                    
+                    if (mainContainer && nakiPage) {
+                        nakiPage.style.display = 'none';
+                        mainContainer.style.display = 'block';
+                    }
+                });
+            }
+            
+            // ナキ・拾い計算
+            if (nakiCalcBtn) {
+                nakiCalcBtn.addEventListener('click', () => {
+                const rows = document.querySelectorAll('.input-row');
+                const bantaiHeaders = document.querySelectorAll('.bantai-1, .bantai-2, .bantai-3, .bantai-4, .bantai-5');
+                
+                rows.forEach((row, index) => {
+                    const inputs = row.querySelectorAll('input');
+                    const resultCells = row.querySelectorAll('.result-cell');
+                    
+                    // 入力値取得
+                    const bantai = parseInt(inputs[1].value) || 0;
+                    const N = parseInt(inputs[2].value) || 0; // 当回数
+                    const J = parseInt(inputs[3].value) || 0; // 10R
+                    const K = parseInt(inputs[4].value) || 0; // 5R
+                    const L = parseInt(inputs[5].value) || 0; // 3R
+                    const X = parseInt(inputs[6].value) || 0; // 総ナキ回数
+                    const O = parseInt(inputs[7].value) || 0; // 差玉
+                    const P = parseInt(inputs[8].value) || 110; // 推定RB
+                    
+                    // 台番号をヘッダーに表示
+                    if (bantai > 0 && bantaiHeaders[index]) {
+                        bantaiHeaders[index].textContent = bantai + '番台';
+                    }
+                    
+                    // 計算実行
+                    if (N > 0 && X > 0) {
+                        // 確率計算
+                        const probability = X / N;
+                        resultCells[0].textContent = '1/' + probability.toFixed(1);
+                        
+                        // 総出玉計算
+                        const Q = ((J * 9) + (K * 4) + (L * 2)) * P;
+                        resultCells[1].textContent = Q.toLocaleString();
+                        
+                        // 推定ナキ/千計算
+                        const investment = (Q - O) / 250;
+                        if (investment > 0) {
+                            const nakiPerK = X / investment;
+                            resultCells[2].textContent = nakiPerK.toFixed(2);
+                            
+                            // 推定拾い/千計算（各寄り率）
+                            const yoriRates = [2.7, 2.5, 2.2, 2.08, 2.0];
+                            yoriRates.forEach((rate, yoriIndex) => {
+                                const hiroiPerK = (X / rate) / investment;
+                                const hiroiCell = document.querySelector(`.hiroi-${index + 1}-${yoriIndex + 1}`);
+                                if (hiroiCell) {
+                                    hiroiCell.textContent = hiroiPerK.toFixed(2);
+                                }
+                            });
+                        } else {
+                            resultCells[2].textContent = '-';
+                            for (let i = 1; i <= 5; i++) {
+                                const hiroiCell = document.querySelector(`.hiroi-${index + 1}-${i}`);
+                                if (hiroiCell) hiroiCell.textContent = '-';
+                            }
+                        }
+                    } else {
+                        // 値がない場合はクリア
+                        resultCells[0].textContent = '-';
+                        resultCells[1].textContent = '-';
+                        resultCells[2].textContent = '-';
+                        for (let i = 1; i <= 5; i++) {
+                            const hiroiCell = document.querySelector(`.hiroi-${index + 1}-${i}`);
+                            if (hiroiCell) hiroiCell.textContent = '-';
+                        }
+                    }
+                });
+            });
+            }
+            
+            // 日付入力の自動フォーマット
+            document.querySelectorAll('.date-input').forEach(input => {
+                input.addEventListener('blur', function() {
+                    const value = this.value;
+                    if (value && value.includes('/')) {
+                        const parts = value.split('/');
+                        if (parts.length === 2) {
+                            const month = parts[0].padStart(2, '0');
+                            const day = parts[1].padStart(2, '0');
+                            this.value = `25/${month}/${day}`;
+                        }
+                    }
+                });
+            });
+            
+            // 差玉の符号処理
+            document.querySelectorAll('.sagidama').forEach(input => {
+                input.addEventListener('blur', function() {
+                    const value = parseInt(this.value) || 0;
+                    if (value !== 0) {
+                        this.value = (value > 0 ? '+' : '') + value;
+                    }
+                });
+            });
+            
+            console.log('初期化完了');
+        }
+        
+        // OCR処理
+        async function performOCR(file) {
+            const ocrStatus = document.getElementById('ocrStatus');
+            ocrStatus.textContent = '画像をアップロード中...';
+            ocrStatus.className = 'ocr-status show loading';
+            
+            try {
+                // 画像をBase64に変換
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                ocrStatus.textContent = 'Google Vision APIで認識中...';
+                console.log('API呼び出し開始');
+                
+                // Netlify Function を呼び出し
+                const response = await fetch('/.netlify/functions/ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                console.log('API応答:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('OCR結果:', result);
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // 構造化データがある場合は優先的に使用
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    console.log('構造化データを使用');
+                    processStructuredData(result.structuredData);
+                } else if (result.text) {
+                    console.log('テキストデータを使用');
+                    processBasicOCR(result.text);
+                }
+                
+                ocrStatus.textContent = '✅ 認識完了 - 必要に応じて数値を修正してください';
+                ocrStatus.className = 'ocr-status show success';
+                
+                // 対象ゲーム数にフォーカス
+                document.getElementById('inputX').focus();
+                
+            } catch (error) {
+                console.error('OCRエラー:', error);
+                ocrStatus.textContent = '❌ 認識エラー - 手動で入力してください';
+                ocrStatus.className = 'ocr-status show error';
+            }
+        }
+        
+        // 複数ファイル処理
+        async function processMultipleFiles(files) {
+            const ocrStatus = document.getElementById('ocrStatus');
+            ocrStatus.textContent = `${files.length}枚の画像を処理中...`;
+            ocrStatus.className = 'ocr-status show loading';
+            
+            try {
+                // 打込0のデータを自動的に追加
+                const zeroData = {
+                    X: 0, A: 0, B: 0, C: 0, D: 0, E: 0, 
+                    F: 0, G: 0, H: 0, I: 0, J: 0, K: 0, L: 0
+                };
+                multipleData.push(zeroData);
+                
+                for (let i = 0; i < files.length; i++) {
+                    ocrStatus.textContent = `処理中... (${i + 1}/${files.length})`;
+                    const data = await performOCRForMultiple(files[i]);
+                    if (data) {
+                        multipleData.push(data);
+                    }
+                }
+                
+                if (multipleData.length > 0) {
+                    // 打込順にソート
+                    multipleData.sort((a, b) => (a.A || 0) - (b.A || 0));
+                    
+                    // 編集インターフェースを作成
+                    createEditInterface();
+                    
+                    // 打込が最大のデータを選択
+                    const maxData = multipleData.reduce((max, current) => 
+                        ((current.A || 0) > (max.A || 0)) ? current : max
+                    );
+                    
+                    // フィールドに値を設定
+                    setFieldValues(maxData);
+                    
+                    ocrStatus.textContent = `✅ ${files.length}枚の処理完了 (0データ含め${multipleData.length}件) - 最大打込: ${maxData.A}`;
+                    ocrStatus.className = 'ocr-status show success';
+                }
+            } catch (error) {
+                console.error('複数ファイル処理エラー:', error);
+                ocrStatus.textContent = '❌ 処理エラー';
+                ocrStatus.className = 'ocr-status show error';
+            }
+        }
+        
+        // 複数選択用のOCR処理
+        async function performOCRForMultiple(file) {
+            try {
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                const response = await fetch('/.netlify/functions/ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: base64 })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // 構造化データから値を抽出
+                if (result.structuredData && result.structuredData.extractedValues) {
+                    return result.structuredData.extractedValues;
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('OCRエラー:', error);
+                return null;
+            }
+        }
+        
+        // 構造化データの処理
+        function processStructuredData(structuredData) {
+            if (!structuredData || !structuredData.extractedValues) {
+                console.log('構造化データが見つかりません');
+                return;
+            }
+            
+            const values = structuredData.extractedValues;
+            console.log('抽出された構造化データ:', values);
+            
+            setFieldValues(values);
+            validateAndAdjust();
+        }
+        
+        // 基本的なテキスト処理
+        function processBasicOCR(text) {
+            console.log('OCRテキスト:', text);
+            const allNumbers = extractNumbersByPosition(text);
+            assignNumbersToInputs(allNumbers);
+        }
+        
+        // フィールドに値を設定
+        function setFieldValues(data) {
+            const fieldMapping = {
+                X: 'inputX',
+                A: 'inputA',
+                B: 'inputB',
+                C: 'inputC',
+                D: 'inputD',
+                E: 'inputE',
+                F: 'inputF',
+                G: 'inputG',
+                H: 'inputH',
+                I: 'inputI',
+                J: 'inputJ',
+                K: 'inputK',
+                L: 'inputL'
+            };
+            
+            for (const [field, inputId] of Object.entries(fieldMapping)) {
+                if (data[field] !== undefined) {
+                    const element = document.getElementById(inputId);
+                    if (element) {
+                        element.value = data[field];
+                    }
+                }
+            }
+        }
+        
+        // 編集画面からデータを更新
+        function updateMultipleDataFromEdit() {
+            const editItems = document.querySelectorAll('.edit-data-item');
+            editItems.forEach((item, index) => {
+                if (multipleData[index]) {
+                    const fields = ['X', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+                    fields.forEach(field => {
+                        const input = item.querySelector(`input[data-field="${field}"]`);
+                        if (input) {
+                            multipleData[index][field] = parseInt(input.value) || 0;
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 編集画面を作成
+        function createEditInterface() {
+            const container = document.getElementById('multiDataEditContainer');
+            container.innerHTML = '';
+            
+            multipleData.forEach((data, index) => {
+                const editItem = document.createElement('div');
+                editItem.className = 'edit-data-item';
+                
+                const title = document.createElement('div');
+                title.className = 'edit-data-title';
+                title.textContent = `データ ${index + 1} - 打込: ${data.A || 0}`;
+                editItem.appendChild(title);
+                
+                // 対象ゲーム数（単独の長い入力欄）
+                const singleDiv = document.createElement('div');
+                singleDiv.className = 'edit-data-single';
+                
+                const singleField = document.createElement('div');
+                singleField.className = 'edit-data-field';
+                
+                const singleLabel = document.createElement('label');
+                singleLabel.textContent = '対象ゲーム数';
+                singleField.appendChild(singleLabel);
+                
+                const singleInput = document.createElement('input');
+                singleInput.type = 'number';
+                singleInput.value = data.X || 0;
+                singleInput.setAttribute('data-field', 'X');
+                singleInput.setAttribute('data-index', index);
+                singleInput.setAttribute('inputmode', 'numeric');
+                singleInput.setAttribute('pattern', '[0-9]*');
+                
+                // フォーカス時に全選択
+                singleInput.addEventListener('focus', function() {
+                    this.select();
+                });
+                
+                singleField.appendChild(singleInput);
+                singleDiv.appendChild(singleField);
+                editItem.appendChild(singleDiv);
+                
+                // 残りの12項目（4×3グリッド）
+                const grid = document.createElement('div');
+                grid.className = 'edit-data-grid';
+                
+                const fields = [
+                    { key: 'A', label: '打込' },
+                    { key: 'B', label: '2穴' },
+                    { key: 'C', label: 'リプレイ' },
+                    { key: 'D', label: 'リプV' },
+                    { key: 'E', label: '羽根拾' },
+                    { key: 'F', label: 'V入賞' },
+                    { key: 'G', label: 'SP' },
+                    { key: 'H', label: 'SP→V' },
+                    { key: 'I', label: '蹴り' },
+                    { key: 'J', label: '10R' },
+                    { key: 'K', label: '5R' },
+                    { key: 'L', label: '3R' }
+                ];
+                
+                fields.forEach(field => {
+                    const fieldDiv = document.createElement('div');
+                    fieldDiv.className = 'edit-data-field';
+                    
+                    const label = document.createElement('label');
+                    label.textContent = field.label;
+                    fieldDiv.appendChild(label);
+                    
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.value = data[field.key] || 0;
+                    input.setAttribute('data-field', field.key);
+                    input.setAttribute('data-index', index);
+                    input.setAttribute('inputmode', 'numeric');
+                    input.setAttribute('pattern', '[0-9]*');
+                    
+                    // フォーカス時に全選択
+                    input.addEventListener('focus', function() {
+                        this.select();
+                    });
+                    
+                    fieldDiv.appendChild(input);
+                    grid.appendChild(fieldDiv);
+                });
+                
+                editItem.appendChild(grid);
+                container.appendChild(editItem);
+            });
+            
+            if (multipleData.length > 0) {
+                document.getElementById('multiDataEditSection').style.display = 'block';
+            }
+        }
+        
+        // 位置ベースで数値を抽出
+        function extractNumbersByPosition(text) {
+            const lines = text.split('\n').filter(line => line.trim());
+            const allNumbers = [];
+            
+            lines.forEach((line, lineIndex) => {
+                const matches = line.matchAll(/\d+/g);
+                for (const match of matches) {
+                    const num = parseInt(match[0]);
+                    if (num >= 0) {
+                        allNumbers.push({
+                            value: num,
+                            line: lineIndex,
+                            position: match.index,
+                            text: match[0]
+                        });
+                    }
+                }
+            });
+            
+            return allNumbers;
+        }
+        
+        // レイアウトパターンに基づいて数値を割り当て
+        function assignNumbersToInputs(numbers) {
+            if (numbers.length === 0) return;
+            
+            // 数値を大きさでソート（大きい順）
+            const sortedByValue = [...numbers].sort((a, b) => b.value - a.value);
+            
+            // 数値範囲に基づく分類
+            const ranges = {
+                extraLarge: [], // 1000以上 (X - 対象ゲーム数)
+                veryLarge: [],  // 300-1000 (E, I)
+                large: [],      // 100-300 (A)
+                medium: [],     // 50-100 (B)
+                small: []       // 0-50 (C,D,F,G,H,J,K,L)
+            };
+            
+            sortedByValue.forEach(num => {
+                if (num.value >= 1000) {
+                    ranges.extraLarge.push(num.value);
+                } else if (num.value >= 300) {
+                    ranges.veryLarge.push(num.value);
+                } else if (num.value >= 100) {
+                    ranges.large.push(num.value);
+                } else if (num.value >= 50) {
+                    ranges.medium.push(num.value);
+                } else {
+                    ranges.small.push(num.value);
+                }
+            });
+            
+            // 割り当て
+            if (ranges.extraLarge.length > 0) {
+                document.getElementById('inputX').value = ranges.extraLarge[0];
+            } else if (ranges.veryLarge.length > 0) {
+                document.getElementById('inputX').value = ranges.veryLarge[0];
+            }
+            
+            if (ranges.large.length > 0) {
+                document.getElementById('inputA').value = ranges.large[0];
+            }
+            
+            if (ranges.veryLarge.length > 0) {
+                const eIndex = ranges.extraLarge.length > 0 ? 0 : 1;
+                if (ranges.veryLarge[eIndex]) {
+                    document.getElementById('inputE').value = ranges.veryLarge[eIndex];
+                }
+            }
+            
+            validateAndAdjust();
+        }
+        
+        // 検証と調整
+        function validateAndAdjust() {
+            // E > I の関係を確認
+            const e = parseInt(document.getElementById('inputE').value) || 0;
+            const i = parseInt(document.getElementById('inputI').value) || 0;
+            if (e > 0 && i > 0 && e < i) {
+                document.getElementById('inputE').value = i;
+                document.getElementById('inputI').value = e;
+            }
+            
+            // C >= D の関係を確認
+            const c = parseInt(document.getElementById('inputC').value) || 0;
+            const d = parseInt(document.getElementById('inputD').value) || 0;
+            if (c > 0 && d > 0 && c < d) {
+                document.getElementById('inputC').value = d;
+                document.getElementById('inputD').value = c;
+            }
+            
+            // G >= H の関係を確認
+            const g = parseInt(document.getElementById('inputG').value) || 0;
+            const h = parseInt(document.getElementById('inputH').value) || 0;
+            if (g > 0 && h > 0 && g < h) {
+                document.getElementById('inputG').value = h;
+                document.getElementById('inputH').value = g;
+            }
+        }
+        
+        // 計算実行
+        function calculate() {
+            // 値取得
+            const v = {
+                X: parseInt(document.getElementById('inputX').value) || 0,
+                A: parseInt(document.getElementById('inputA').value) || 0,
+                B: parseInt(document.getElementById('inputB').value) || 0,
+                C: parseInt(document.getElementById('inputC').value) || 0,
+                D: parseInt(document.getElementById('inputD').value) || 0,
+                E: parseInt(document.getElementById('inputE').value) || 0,
+                F: parseInt(document.getElementById('inputF').value) || 0,
+                G: parseInt(document.getElementById('inputG').value) || 0,
+                H: parseInt(document.getElementById('inputH').value) || 0,
+                I: parseInt(document.getElementById('inputI').value) || 0,
+                J: parseInt(document.getElementById('inputJ').value) || 0,
+                K: parseInt(document.getElementById('inputK').value) || 0,
+                L: parseInt(document.getElementById('inputL').value) || 0
+            };
+            
+            // 計算
+            const jackpotCount = v.J + v.K + v.L;
+            const avgRound = jackpotCount > 0 ? ((v.J * 9 + v.K * 4 + v.L * 2) / jackpotCount).toFixed(1) : '0';
+            
+            // 結果表示
+            document.getElementById('resultA').textContent = v.A;
+            document.getElementById('jackpotCount').textContent = jackpotCount;
+            document.getElementById('jackpotProb').textContent = jackpotCount > 0 ? '1/' + (v.X / jackpotCount).toFixed(1) : '-';
+            document.getElementById('jCount').textContent = v.J;
+            document.getElementById('kCount').textContent = v.K;
+            document.getElementById('lCount').textContent = v.L;
+            document.getElementById('avgRound').textContent = avgRound;
+            
+            document.getElementById('totalNaki').textContent = v.X;
+            document.getElementById('nakiPer').textContent = v.A > 0 ? (v.X / (v.A / 2)).toFixed(1) : '-';
+            document.getElementById('totalPickup').textContent = v.E;
+            document.getElementById('pickupPer').textContent = v.A > 0 ? (v.E / (v.A / 2)).toFixed(1) : '-';
+            document.getElementById('pickupRate').textContent = v.X > 0 ? ((v.E / v.X) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('yakumonoProb').textContent = jackpotCount > 0 ? '1/' + (v.E / jackpotCount).toFixed(1) : '-';
+            
+            document.getElementById('kickRate').textContent = (v.E - v.G) > 0 ? ((v.I / (v.E - v.G)) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('spRate').textContent = v.E > 0 ? ((v.G / v.E) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('spSuccess').textContent = v.G > 0 ? ((v.H / v.G) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('replaySuccess').textContent = v.C > 0 ? ((v.D / v.C) * 100).toFixed(1) + '%' : '-';
+            
+            // ヒキ計算
+            const roundHiki = ((v.J * 9 + v.K * 4 + v.L * 2) - (jackpotCount * 5)) * 110;
+            const spHiki = (v.H - (v.G / 3)) * 550;
+            const repHiki = (v.D - (v.I / 25.2)) * 550;
+            const normHiki = (v.F - (v.I / 8.4)) * 550;
+            const totalHiki = roundHiki + spHiki + repHiki + normHiki;
+            
+            // ヒキの値を設定（色のクラスも付与）
+            const setHikiValue = (elementId, value) => {
+                const element = document.getElementById(elementId);
+                element.textContent = formatHiki(value);
+                element.className = value >= 0 ? 'hiki-value positive' : 'hiki-value negative';
+            };
+            
+            setHikiValue('totalHiki', totalHiki);
+            setHikiValue('rHiki', roundHiki);
+            setHikiValue('spHiki', spHiki);
+            setHikiValue('repHiki', repHiki);
+            setHikiValue('normHiki', normHiki);
+            
+            document.getElementById('resultSection').style.display = 'block';
+            document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // ヒキのフォーマット
+        function formatHiki(val) {
+            const rounded = Math.round(val);
+            const absVal = Math.abs(rounded);
+            const formatted = absVal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            // プラスマイナスの記号を必ず付ける
+            if (rounded >= 0) {
+                return '+' + formatted;
+            } else {
+                return '-' + formatted;
+            }
+        }
+        
+        // データテーブル表示
+        function displayDataTable() {
+            if (multipleData.length === 0) return;
+            
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            
+            multipleData.forEach(data => {
+                const row = calculateRowData(data);
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td>${row.utikomi}</td>
+                    <td>${row.jackpotCount}</td>
+                    <td>${row.jackpotProb}</td>
+                    <td>${row.avgRound}</td>
+                    <td>${row.nakiPer}</td>
+                    <td>${row.pickupPer}</td>
+                    <td>${row.pickupRate}</td>
+                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('dataTableSection').style.display = 'block';
+        }
+        
+        // 区間データテーブル表示
+        function displayIntervalTable() {
+            if (multipleData.length < 2) return;
+            
+            const tbody = document.getElementById('intervalTableBody');
+            tbody.innerHTML = '';
+            
+            for (let i = 1; i < multipleData.length; i++) {
+                const prevData = multipleData[i - 1];
+                const currData = multipleData[i];
+                
+                const intervalData = {
+                    X: (currData.X || 0) - (prevData.X || 0),
+                    A: (currData.A || 0) - (prevData.A || 0),
+                    B: (currData.B || 0) - (prevData.B || 0),
+                    C: (currData.C || 0) - (prevData.C || 0),
+                    D: (currData.D || 0) - (prevData.D || 0),
+                    E: (currData.E || 0) - (prevData.E || 0),
+                    F: (currData.F || 0) - (prevData.F || 0),
+                    G: (currData.G || 0) - (prevData.G || 0),
+                    H: (currData.H || 0) - (prevData.H || 0),
+                    I: (currData.I || 0) - (prevData.I || 0),
+                    J: (currData.J || 0) - (prevData.J || 0),
+                    K: (currData.K || 0) - (prevData.K || 0),
+                    L: (currData.L || 0) - (prevData.L || 0)
+                };
+                
+                const row = calculateRowData(intervalData);
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td>${prevData.A || 0}-${currData.A || 0}</td>
+                    <td>${row.jackpotCount}</td>
+                    <td>${row.jackpotProb}</td>
+                    <td>${row.avgRound}</td>
+                    <td>${row.nakiPer}</td>
+                    <td>${row.pickupPer}</td>
+                    <td>${row.pickupRate}</td>
+                    <td class="${row.hikiClass}">${row.hikiFormatted}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            }
+        }
+        
+        // 行データの計算
+        function calculateRowData(data) {
+            const jackpotCount = (data.J || 0) + (data.K || 0) + (data.L || 0);
+            const avgRound = jackpotCount > 0 ? 
+                ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2) / jackpotCount : 0;
+            const jackpotProb = jackpotCount > 0 ? 
+                '1/' + (data.X / jackpotCount).toFixed(1) : '-';
+            const nakiPer = data.A > 0 ? 
+                (data.X / (data.A / 2)).toFixed(1) : '-';
+            const pickupPer = data.A > 0 ? 
+                (data.E / (data.A / 2)).toFixed(1) : '-';
+            const pickupRate = data.X > 0 ? 
+                ((data.E / data.X) * 100).toFixed(1) + '%' : '-';
+            
+            // ヒキ計算
+            const roundHiki = ((data.J || 0) * 9 + (data.K || 0) * 4 + (data.L || 0) * 2 - jackpotCount * 5) * 110;
+            const spHiki = ((data.H || 0) - ((data.G || 0) / 3)) * 550;
+            const repHiki = ((data.D || 0) - ((data.I || 0) / 25.2)) * 550;
+            const normHiki = ((data.F || 0) - ((data.I || 0) / 8.4)) * 550;
+            const totalHiki = roundHiki + spHiki + repHiki + normHiki;
+            
+            return {
+                utikomi: data.A || 0,
+                jackpotCount: jackpotCount,
+                jackpotProb: jackpotProb,
+                avgRound: avgRound.toFixed(1),
+                nakiPer: nakiPer,
+                pickupPer: pickupPer,
+                pickupRate: pickupRate,
+                hikiFormatted: formatHiki(totalHiki),
+                hikiClass: totalHiki >= 0 ? 'positive' : 'negative',
+                totalHiki: totalHiki
+            };
+        }
+        
+        // グラフ表示
+        function displayGraphs() {
+            if (multipleData.length < 2) return;
+            
+            document.getElementById('graphSection').style.display = 'block';
+            
+            // 既存のグラフを破棄
+            charts.forEach(chart => {
+                if (chart) chart.destroy();
+            });
+            charts = [];
+            
+            // 区間データを計算
+            const intervalData = [];
+            for (let i = 1; i < multipleData.length; i++) {
+                const prevData = multipleData[i - 1];
+                const currData = multipleData[i];
+                
+                const interval = {
+                    X: (currData.X || 0) - (prevData.X || 0),
+                    A: (currData.A || 0) - (prevData.A || 0),
+                    E: (currData.E || 0) - (prevData.E || 0),
+                    F: (currData.F || 0) - (prevData.F || 0),
+                    G: (currData.G || 0) - (prevData.G || 0),
+                    H: (currData.H || 0) - (prevData.H || 0),
+                    I: (currData.I || 0) - (prevData.I || 0),
+                    J: (currData.J || 0) - (prevData.J || 0),
+                    K: (currData.K || 0) - (prevData.K || 0),
+                    L: (currData.L || 0) - (prevData.L || 0),
+                    D: (currData.D || 0) - (prevData.D || 0)
+                };
+                
+                const row = calculateRowData(interval);
+                
+                let jackpotDenom = 40;
+                if (row.jackpotProb !== '-') {
+                    const parts = row.jackpotProb.split('/');
+                    if (parts.length === 2) {
+                        jackpotDenom = parseFloat(parts[1]);
+                    }
+                }
+                
+                intervalData.push({
+                    label: prevData.A || 0,
+                    utikomi: prevData.A || 0,
+                    jackpotDenom: jackpotDenom,
+                    avgRound: parseFloat(row.avgRound) || 0,
+                    nakiPer: parseFloat(row.nakiPer) || 0,
+                    pickupPer: parseFloat(row.pickupPer) || 0,
+                    pickupRate: parseFloat(row.pickupRate) || 0,
+                    totalHiki: row.totalHiki || 0
+                });
+            }
+            
+            // Chart.jsのデフォルト設定
+            Chart.defaults.color = '#888';
+            Chart.defaults.borderColor = '#333';
+            
+            // グラフ作成
+            createChart('chart1', '大当確率分母', intervalData.map(d => d.jackpotDenom), '#4a90e2', true, 10, 40, '1/');
+            createChart('chart2', '平均R', intervalData.map(d => d.avgRound), '#f5a623', false, 3, 10);
+            createChart('chart3', 'ナキ/千', intervalData.map(d => d.nakiPer), '#50e3c2', false, 6, 20);
+            createChart('chart4', '拾い/千', intervalData.map(d => d.pickupPer), '#b8e986', false, 3, 10);
+            createChart('chart5', '拾球率', intervalData.map(d => d.pickupRate), '#ff6b6b', false, 25, 80, '%');
+            
+            // ヒキの多寡グラフ
+            const maxHiki = Math.max(...intervalData.map(d => Math.abs(d.totalHiki)), 5000);
+            const ctx6 = document.getElementById('chart6').getContext('2d');
+            const chart6 = new Chart(ctx6, {
+                type: 'line',
+                data: {
+                    labels: intervalData.map(d => d.label),
+                    datasets: [{
+                        label: 'ヒキの多寡',
+                        data: intervalData.map(d => d.totalHiki),
+                        borderColor: '#9333ea',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        segment: {
+                            borderColor: function(ctx) {
+                                if (ctx.p0 && ctx.p0.parsed) {
+                                    return ctx.p0.parsed.y >= 0 ? '#4ade80' : '#f87171';
+                                }
+                                return '#9333ea';
+                            }
+                        },
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#333' },
+                            ticks: { font: { size: 10 } },
+                            title: {
+                                display: true,
+                                text: '打込',
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            min: -maxHiki,
+                            max: maxHiki,
+                            grid: { 
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return '#666';
+                                    }
+                                    return '#333';
+                                }
+                            },
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    return (value >= 0 ? '+' : '') + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            charts.push(chart6);
+            
+            function createChart(canvasId, label, data, color, reverse = false, min, max, suffix = '') {
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: intervalData.map(d => d.label),
+                        datasets: [{
+                            label: label,
+                            data: data,
+                            borderColor: color,
+                            backgroundColor: color.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: '#333' },
+                                ticks: { font: { size: 10 } },
+                                title: {
+                                    display: true,
+                                    text: '打込',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                min: min,
+                                max: max,
+                                reverse: reverse,
+                                grid: { color: '#333' },
+                                ticks: {
+                                    font: { size: 10 },
+                                    callback: function(value) {
+                                        return suffix ? suffix + value.toFixed(0) : value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                charts.push(chart);
+            }
+        }
+        
+        // ページ読み込み時に初期化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おだて豚 データ解析ツール v68</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 10px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .section {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+        
+        .upload-btn {
+            width: 100%;
+            padding: 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .upload-btn.green {
+            background: #28a745;
+        }
+        
+        .upload-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .upload-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .ocr-status {
+            background: #2a2a2a;
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+            display: none;
+        }
+        
+        .ocr-status.show {
+            display: block;
+        }
+        
+        .ocr-status.loading {
+            color: #ffa500;
+        }
+        
+        .ocr-status.success {
+            color: #4ade80;
+            background: #1a3a1a;
+        }
+        
+        .ocr-status.error {
+            color: #f87171;
+            background: #3a1a1a;
+        }
+        
+        .notice {
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+        
+        .input-section {
+            margin-bottom: 15px;
+        }
+        
+        .input-single {
+            margin-bottom: 10px;
+        }
+        
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 10px 0;
+        }
+        
+        .input-item {
+            text-align: center;
+        }
+        
+        .input-item label {
+            font-size: 11px;
+            color: #888;
+            display: block;
+            margin-bottom: 3px;
+        }
+        
+        .input-item input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #444;
+            background: #0a0a0a;
+            color: #fff;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .input-item input:focus {
+            outline: none;
+            border-color: #007bff;
+            background: #1a1a1a;
+        }
+        
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .result-section {
+            display: none;
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+        }
+        
+        .result-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .screenshot-hint {
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .result-group {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+        }
+        
+        .result-group.jackpot {
+            background: rgba(74, 144, 226, 0.1);
+        }
+        
+        .result-group.stats {
+            background: rgba(34, 197, 94, 0.1);
+            padding: 8px;
+        }
+        
+        .result-group.yakumono {
+            background: rgba(251, 146, 60, 0.1);
+            padding: 8px;
+        }
+        
+        .result-group.hiki {
+            background: rgba(147, 51, 234, 0.1);
+            padding: 8px;
+        }
+        
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .result-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .result-group:not(.jackpot) .result-row {
+            margin-bottom: 6px;
+        }
+        
+        .result-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .result-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        
+        .result-group:not(.jackpot) .result-label {
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+        
+        .result-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .result-group:not(.jackpot) .result-value {
+            font-size: 16px;
+        }
+        
+        .result-value.large {
+            font-size: 22px;
+        }
+        
+        /* 単位のスタイル */
+        .unit {
+            font-size: 14px;
+            color: #888;
+            margin-left: 2px;
+            font-weight: normal;
+        }
+        
+        .result-value.large .unit {
+            font-size: 14px;
+        }
+        
+        .result-group:not(.jackpot) .unit {
+            font-size: 12px;
+        }
+        
+        /* R振分のスタイル */
+        .r-dist {
+            font-size: 14px;
+        }
+        
+        .r-dist .value {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 1px;
+        }
+        
+        .r-label-10r {
+            font-size: 10px;
+            color: #a04040;
+            margin-right: 1px;
+            font-weight: normal;
+        }
+        
+        .r-label-5r {
+            font-size: 10px;
+            color: #a06030;
+            margin-right: 1px;
+            font-weight: normal;
+        }
+        
+        .r-label-3r {
+            font-size: 10px;
+            color: #4080a0;
+            margin-right: 1px;
+            font-weight: normal;
+        }
+        
+        /* ヒキの色 */
+        .positive {
+            color: #4ade80;
+        }
+        
+        .negative {
+            color: #f87171;
+        }
+        
+        .hiki-total {
+            background: rgba(30, 41, 59, 0.5);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 8px;
+            border: 1px solid #334155;
+        }
+        
+        .hiki-total .result-value {
+            font-size: 20px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,.2);
+            border-radius: 50%;
+            border-top-color: #007bff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 6px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .debug-mode {
+            display: none;
+            background: #2a2a2a;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .debug-mode.show {
+            display: block;
+        }
+        
+        /* 複数データ編集セクション */
+        .multi-data-edit-section {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .edit-toggle-btn {
+            width: 100%;
+            padding: 10px;
+            background: #495057;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .edit-toggle-btn:hover {
+            background: #5a6268;
+        }
+        
+        .multi-data-edit-container {
+            display: none;
+            background: #2a2a2a;
+            border-radius: 6px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .multi-data-edit-container.show {
+            display: block;
+        }
+        
+        .edit-data-item {
+            background: #1a1a1a;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+        
+        .edit-data-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4a90e2;
+        }
+        
+        .edit-data-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+        
+        .edit-data-single {
+            margin-bottom: 8px;
+        }
+        
+        .edit-data-single .edit-data-field {
+            width: 100%;
+        }
+        
+        .edit-data-field {
+            text-align: center;
+        }
+        
+        .edit-data-field label {
+            font-size: 10px;
+            color: #888;
+            display: block;
+            margin-bottom: 2px;
+        }
+        
+        .edit-data-field input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #444;
+            background: #0a0a0a;
+            color: #fff;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        /* 複数データ表のスタイル */
+        .data-table-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .data-table-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        
+        .data-table-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: center;
+        }
+        
+        .data-table th {
+            background: #2a2a2a;
+            color: #aaa;
+            font-weight: bold;
+        }
+        
+        .data-table td {
+            background: #0a0a0a;
+        }
+        
+        .data-table tr:hover td {
+            background: #1a1a1a;
+        }
+        
+        .data-table .positive {
+            color: #4ade80;
+        }
+        
+        .data-table .negative {
+            color: #f87171;
+        }
+        
+        /* グラフセクションのスタイル */
+        .graph-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .graph-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .graph-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #fff;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 150px;
+            margin: 0 auto;
+        }
+        
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .chart-grid .graph-container {
+            margin-bottom: 0;
+        }
+        
+        .chart-grid .chart-wrapper {
+            height: 120px;
+        }
+        
+        canvas {
+            max-width: 100%;
+            height: auto !important;
+        }
+        
+        /* ナキ・拾い推定ページのスタイル */
+        .naki-hiroi-page {
+            padding: 10px;
+            max-width: 100%;
+            margin: 0 auto;
+            overflow-x: auto;
+        }
+        
+        .naki-table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 15px;
+        }
+        
+        .naki-table, .hiroi-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: #1a1a1a;
+            margin-bottom: 10px;
+        }
+        
+        .naki-table th, .naki-table td,
+        .hiroi-table th, .hiroi-table td {
+            border: 1px solid #444;
+            padding: 4px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .naki-table th, .hiroi-table th {
+            background: #2a2a2a;
+            color: #aaa;
+            font-weight: bold;
+            font-size: 10px;
+        }
+        
+        .input-row td {
+            background: #0a0a0a;
+            padding: 2px;
+        }
+        
+        .date-input, .number-input {
+            width: 100%;
+            padding: 4px 2px;
+            border: 1px solid #444;
+            background: #1a2a3a;
+            color: #fff;
+            border-radius: 3px;
+            text-align: center;
+            font-size: 11px;
+        }
+        
+        .date-input:focus, .number-input:focus {
+            outline: none;
+            border-color: #007bff;
+            background: #2a3a4a;
+        }
+        
+        .unit {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 8px;
+            color: #666;
+            pointer-events: none;
+        }
+        
+        .result-cell {
+            background: #0a0a0a;
+            color: #fff;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        
+        .result-cell.small {
+            font-size: 9px;
+            color: #888;
+        }
+        
+        .result-cell.highlight-yellow {
+            background: rgba(255, 235, 59, 0.2);
+            color: #ffeb3b;
+            font-size: 12px;
+        }
+        
+        .result-cell.highlight-green {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            font-size: 12px;
+        }
+        
+        .yori-label {
+            background: #2a2a2a;
+            color: #aaa;
+            font-weight: bold;
+            font-size: 10px;
+            text-align: left;
+            padding-left: 8px;
+        }
+        
+        .sagidama {
+            color: #fff;
+        }
+        
+        /* スマホ対応 */
+        @media (max-width: 600px) {
+            .naki-table, .hiroi-table {
+                font-size: 10px;
+            }
+            
+            .naki-table th, .hiroi-table th {
+                font-size: 9px;
+                padding: 2px;
+            }
+            
+            .date-input, .number-input {
+                font-size: 10px;
+                padding: 2px;
+            }
+            
+            .unit {
+                font-size: 7px;
+            }
+            
+            .result-cell {
+                font-size: 10px;
+            }
+            
+            .result-cell.small {
+                font-size: 8px;
+            }
+            
+            .result-cell.highlight-yellow,
+            .result-cell.highlight-green {
+                font-size: 11px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <h1>🐷 おだて豚 データ解析 v68</h1>
+        
+        <div class="section">
+            <label for="fileInput" class="upload-btn" style="display: block; text-align: center;">
+                📸 スクショを選択
+            </label>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            
+            <label for="multiFileInput" class="upload-btn green" style="display: block; text-align: center;">
+                📸 スクショ連続選択
+            </label>
+            <input type="file" id="multiFileInput" accept="image/*" multiple style="display: none;">
+            
+            <button class="upload-btn" id="nakiHiroiBtn" style="background: #9b59b6; width: 100%; padding: 15px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; margin-bottom: 15px; color: white;" onclick="showNakiHiroiPage()">
+                📊 ナキ・拾い推定
+            </button>
+            
+            <div class="ocr-status" id="ocrStatus">
+                読み取り待機中...
+        </div>
+    
+    <!-- ナキ・拾い推定ページ -->
+    <div id="nakiHiroiPage" style="display: none;">
+        <div style="background: #0a0a0a; color: #fff; min-height: 100vh; padding: 10px;">
+            <div style="max-width: 600px; margin: 0 auto;">
+                <h1 style="font-size: 20px; text-align: center; margin-bottom: 15px; font-weight: bold; color: #fff;">📊 ナキ・拾い推定</h1>
+                
+                <div class="section">
+                    <button class="btn btn-primary" id="nakiCalcBtn" style="width: 100%; margin-bottom: 15px;">計算する</button>
+                
+                <div class="naki-table-container">
+                    <table class="naki-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 8%;">日付</th>
+                                <th style="width: 8%;">台番号</th>
+                                <th style="width: 8%;">当回数</th>
+                                <th style="width: 8%;">10R</th>
+                                <th style="width: 8%;">5R</th>
+                                <th style="width: 8%;">3R</th>
+                                <th style="width: 10%;">総ナキ回数</th>
+                                <th style="width: 10%;">差玉</th>
+                                <th style="width: 8%;">推定RB</th>
+                                <th style="width: 8%;">確率</th>
+                                <th style="width: 8%;">総出玉</th>
+                                <th style="width: 10%;">推定ナキ/千</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 5行の入力欄 -->
+                            <tr class="input-row">
+                                <td><input type="text" class="date-input" placeholder="5/31"><span class="unit">日</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">番台</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input sagidama"><span class="unit">玉</span></td>
+                                <td><input type="number" class="number-input" value="110"></td>
+                                <td class="result-cell">-</td>
+                                <td class="result-cell small">-</td>
+                                <td class="result-cell highlight-yellow">-</td>
+                            </tr>
+                            <tr class="input-row">
+                                <td><input type="text" class="date-input"><span class="unit">日</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">番台</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input sagidama"><span class="unit">玉</span></td>
+                                <td><input type="number" class="number-input" value="110"></td>
+                                <td class="result-cell">-</td>
+                                <td class="result-cell small">-</td>
+                                <td class="result-cell highlight-yellow">-</td>
+                            </tr>
+                            <tr class="input-row">
+                                <td><input type="text" class="date-input"><span class="unit">日</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">番台</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input sagidama"><span class="unit">玉</span></td>
+                                <td><input type="number" class="number-input" value="110"></td>
+                                <td class="result-cell">-</td>
+                                <td class="result-cell small">-</td>
+                                <td class="result-cell highlight-yellow">-</td>
+                            </tr>
+                            <tr class="input-row">
+                                <td><input type="text" class="date-input"><span class="unit">日</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">番台</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input sagidama"><span class="unit">玉</span></td>
+                                <td><input type="number" class="number-input" value="110"></td>
+                                <td class="result-cell">-</td>
+                                <td class="result-cell small">-</td>
+                                <td class="result-cell highlight-yellow">-</td>
+                            </tr>
+                            <tr class="input-row">
+                                <td><input type="text" class="date-input"><span class="unit">日</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">番台</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input"><span class="unit">回</span></td>
+                                <td><input type="number" class="number-input sagidama"><span class="unit">玉</span></td>
+                                <td><input type="number" class="number-input" value="110"></td>
+                                <td class="result-cell">-</td>
+                                <td class="result-cell small">-</td>
+                                <td class="result-cell highlight-yellow">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <!-- 推定拾い/千 テーブル -->
+                    <table class="hiroi-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="width: 16%;">推定拾/千</th>
+                                <th colspan="5" style="text-align: center;">番台</th>
+                            </tr>
+                            <tr>
+                                <th class="bantai-1">-</th>
+                                <th class="bantai-2">-</th>
+                                <th class="bantai-3">-</th>
+                                <th class="bantai-4">-</th>
+                                <th class="bantai-5">-</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="yori-label">寄37%(1/2.7)</td>
+                                <td class="result-cell highlight-green hiroi-1-1">-</td>
+                                <td class="result-cell highlight-green hiroi-2-1">-</td>
+                                <td class="result-cell highlight-green hiroi-3-1">-</td>
+                                <td class="result-cell highlight-green hiroi-4-1">-</td>
+                                <td class="result-cell highlight-green hiroi-5-1">-</td>
+                            </tr>
+                            <tr>
+                                <td class="yori-label">寄40%(1/2.5)</td>
+                                <td class="result-cell highlight-green hiroi-1-2">-</td>
+                                <td class="result-cell highlight-green hiroi-2-2">-</td>
+                                <td class="result-cell highlight-green hiroi-3-2">-</td>
+                                <td class="result-cell highlight-green hiroi-4-2">-</td>
+                                <td class="result-cell highlight-green hiroi-5-2">-</td>
+                            </tr>
+                            <tr>
+                                <td class="yori-label">寄45%(1/2.2)</td>
+                                <td class="result-cell highlight-green hiroi-1-3">-</td>
+                                <td class="result-cell highlight-green hiroi-2-3">-</td>
+                                <td class="result-cell highlight-green hiroi-3-3">-</td>
+                                <td class="result-cell highlight-green hiroi-4-3">-</td>
+                                <td class="result-cell highlight-green hiroi-5-3">-</td>
+                            </tr>
+                            <tr>
+                                <td class="yori-label">寄48%(1/2.08)</td>
+                                <td class="result-cell highlight-green hiroi-1-4">-</td>
+                                <td class="result-cell highlight-green hiroi-2-4">-</td>
+                                <td class="result-cell highlight-green hiroi-3-4">-</td>
+                                <td class="result-cell highlight-green hiroi-4-4">-</td>
+                                <td class="result-cell highlight-green hiroi-5-4">-</td>
+                            </tr>
+                            <tr>
+                                <td class="yori-label">寄50%(1/2.0)</td>
+                                <td class="result-cell highlight-green hiroi-1-5">-</td>
+                                <td class="result-cell highlight-green hiroi-2-5">-</td>
+                                <td class="result-cell highlight-green hiroi-3-5">-</td>
+                                <td class="result-cell highlight-green hiroi-4-5">-</td>
+                                <td class="result-cell highlight-green hiroi-5-5">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                </div>
+                
+                <button class="btn btn-secondary" id="backToTopBtn" style="width: 100%; margin-top: 15px;" onclick="showMainPage()">TOPに戻る</button>
+            </div>
+        </div>
+            
+            <div class="notice">
+                ※読み取りが不正確な場合は手動で修正してください
+            </div>
+            
+            <div class="input-section">
+                <div class="input-single">
+                    <div class="input-item">
+                        <label>対象ゲーム数</label>
+                        <input type="number" id="inputX" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                </div>
+                
+                <div class="input-grid">
+                    <div class="input-item">
+                        <label>打込</label>
+                        <input type="number" id="inputA" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>2穴</label>
+                        <input type="number" id="inputB" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>リプレイ</label>
+                        <input type="number" id="inputC" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>リプV</label>
+                        <input type="number" id="inputD" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>羽根拾</label>
+                        <input type="number" id="inputE" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>V入賞</label>
+                        <input type="number" id="inputF" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>SP</label>
+                        <input type="number" id="inputG" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>SP→V</label>
+                        <input type="number" id="inputH" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>蹴り</label>
+                        <input type="number" id="inputI" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>10R</label>
+                        <input type="number" id="inputJ" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>5R</label>
+                        <input type="number" id="inputK" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                    <div class="input-item">
+                        <label>3R</label>
+                        <input type="number" id="inputL" inputmode="numeric" pattern="[0-9]*">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" id="calcBtn">計算</button>
+                <button class="btn btn-secondary" id="resetBtn">リセット</button>
+            </div>
+            
+            <div class="multi-data-edit-section" id="multiDataEditSection">
+                <button class="edit-toggle-btn" id="editToggleBtn">📝 読み取りデータの確認・修正</button>
+                <div class="multi-data-edit-container" id="multiDataEditContainer"></div>
+            </div>
+            
+            <div class="debug-mode" id="debugMode"></div>
+        </div>
+        
+        <div class="section result-section" id="resultSection">
+            <div class="result-header">
+                <div class="result-title">打込 <span id="resultA">100</span></div>
+                <div class="screenshot-hint">📱 スクショ推奨</div>
+            </div>
+            
+            <div class="result-group jackpot">
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">大当</div>
+                        <div class="result-value large">
+                            <span id="jackpotCount">-</span>
+                            <span class="unit">回</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">大当り確率</div>
+                        <div class="result-value" id="jackpotProb">-</div>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">R振分</div>
+                        <div class="result-value r-dist">
+                            <span class="r-label-10r">10R</span><span class="value" id="jCount">-</span>
+                            <span style="margin: 0 2px;"></span>
+                            <span class="r-label-5r">5R</span><span class="value" id="kCount">-</span>
+                            <span style="margin: 0 2px;"></span>
+                            <span class="r-label-3r">3R</span><span class="value" id="lCount">-</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">平均R</div>
+                        <div class="result-value" id="avgRound">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-group stats">
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">総ナキ数</div>
+                        <div class="result-value">
+                            <span id="totalNaki">-</span>
+                            <span class="unit">回</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">ナキ/千</div>
+                        <div class="result-value">
+                            <span id="nakiPer">-</span>
+                            <span class="unit">回/千</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">総拾い個数</div>
+                        <div class="result-value">
+                            <span id="totalPickup">-</span>
+                            <span class="unit">個</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">拾い/千</div>
+                        <div class="result-value">
+                            <span id="pickupPer">-</span>
+                            <span class="unit">個/千</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">拾球率</div>
+                        <div class="result-value" id="pickupRate">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">役物確率</div>
+                        <div class="result-value" id="yakumonoProb">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-group yakumono">
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">蹴り率</div>
+                        <div class="result-value" id="kickRate">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">SP発展率</div>
+                        <div class="result-value" id="spRate">-</div>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">SP成功率</div>
+                        <div class="result-value" id="spSuccess">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">リプレイ成功率</div>
+                        <div class="result-value" id="replaySuccess">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="result-group hiki">
+                <div class="hiki-total">
+                    <div class="result-label">期待差玉からのヒキの多寡</div>
+                    <div class="result-value">
+                        <span id="totalHiki" class="hiki-value">-</span>
+                        <span class="unit">個</span>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">Rのヒキ</div>
+                        <div class="result-value">
+                            <span id="rHiki" class="hiki-value">-</span>
+                            <span class="unit">個</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">SPルートのヒキ</div>
+                        <div class="result-value">
+                            <span id="spHiki" class="hiki-value">-</span>
+                            <span class="unit">個</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <div class="result-item">
+                        <div class="result-label">通-リプレイのヒキ</div>
+                        <div class="result-value">
+                            <span id="repHiki" class="hiki-value">-</span>
+                            <span class="unit">個</span>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">通常ルートのヒキ</div>
+                        <div class="result-value">
+                            <span id="normHiki" class="hiki-value">-</span>
+                            <span class="unit">個</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section data-table-section" id="dataTableSection">
+            <div class="data-table-container">
+                <div class="data-table-title">📊 時点データ表</div>
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>打込</th>
+                            <th>大当<br>回数</th>
+                            <th>大当<br>確率</th>
+                            <th>平均R</th>
+                            <th>ナキ/<br>千</th>
+                            <th>拾い/<br>千</th>
+                            <th>拾球率</th>
+                            <th>ヒキ多寡</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="data-table-container">
+                <div class="data-table-title">📊 区間データ表</div>
+                <table class="data-table" id="intervalTable">
+                    <thead>
+                        <tr>
+                            <th>区間</th>
+                            <th>大当<br>回数</th>
+                            <th>大当<br>確率</th>
+                            <th>平均R</th>
+                            <th>ナキ/<br>千</th>
+                            <th>拾い/<br>千</th>
+                            <th>拾球率</th>
+                            <th>ヒキ多寡</th>
+                        </tr>
+                    </thead>
+                    <tbody id="intervalTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="section graph-section" id="graphSection">
+            <div class="graph-container">
+                <div class="graph-title">📈 区間データ推移グラフ</div>
+                <div class="chart-grid">
+                    <div class="graph-container">
+                        <div class="graph-title">①大当確率の分母</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart1"></canvas>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-title">②平均R</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart2"></canvas>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-title">③ナキ/千</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart3"></canvas>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-title">④拾い/千</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart4"></canvas>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-title">⑤拾球率</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart5"></canvas>
+                        </div>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-title">⑥ヒキの多寡</div>
+                        <div class="chart-wrapper">
+                            <canvas id="chart6"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // グローバル変数
+        let multipleData = [];
+        let charts = [];
+        
+        // 初期化関数
+        function init() {
+            console.log('初期化開始');
+            
+            // 要素取得
+            const fileInput = document.getElementById('fileInput');
+            const multiFileInput =
