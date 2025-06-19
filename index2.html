@@ -146,34 +146,40 @@
             ocrStatus.className = 'ocr-status show loading';
             
             try {
-                // 打込0のデータを自動的に追加
-                const zeroData = {
-                    X: 0, A: 0, B: 0, C: 0, D: 0, E: 0, 
-                    F: 0, G: 0, H: 0, I: 0, J: 0, K: 0, L: 0
-                };
-                multipleData.push(zeroData);
-                
+                // まず画像からデータを読み込む
+                const readData = [];
                 for (let i = 0; i < files.length; i++) {
                     ocrStatus.textContent = `処理中... (${i + 1}/${files.length})`;
                     const data = await performOCRForMultiple(files[i]);
                     if (data) {
-                        multipleData.push(data);
+                        readData.push(data);
                     }
                 }
                 
-                if (multipleData.length > 0) {
+                if (readData.length > 0) {
+                    // 読み込んだデータから最大打込のデータを見つける
+                    const maxData = readData.reduce((max, current) => 
+                        ((current.A || 0) > (max.A || 0)) ? current : max
+                    );
+                    
+                    // multipleDataをリセットして、打込0のデータを最初に追加
+                    multipleData = [];
+                    const zeroData = {
+                        X: 0, A: 0, B: 0, C: 0, D: 0, E: 0, 
+                        F: 0, G: 0, H: 0, I: 0, J: 0, K: 0, L: 0
+                    };
+                    multipleData.push(zeroData);
+                    
+                    // 読み込んだデータを追加
+                    multipleData.push(...readData);
+                    
                     // 打込順にソート
                     multipleData.sort((a, b) => (a.A || 0) - (b.A || 0));
                     
                     // 編集インターフェースを作成
                     createEditInterface();
                     
-                    // 打込が最大のデータを選択
-                    const maxData = multipleData.reduce((max, current) => 
-                        ((current.A || 0) > (max.A || 0)) ? current : max
-                    );
-                    
-                    // フィールドに値を設定
+                    // 最大打込のデータをフィールドに設定
                     setFieldValues(maxData);
                     
                     ocrStatus.textContent = `✅ ${files.length}枚の処理完了 (0データ含め${multipleData.length}件) - 最大打込: ${maxData.A}`;
