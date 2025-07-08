@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週間大当り確率</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px 20px;
+        }
+
+        .title {
+            text-align: center;
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+            font-weight: normal;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .upload-button {
+            width: 100%;
+            padding: 15px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            transition: background-color 0.2s;
+        }
+
+        .upload-button:hover {
+            background: #0056b3;
+        }
+
+        .upload-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .result-label {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .result-value {
+            font-weight: 600;
+            color: #212529;
+        }
+
+        .probability-result {
+            background: #e3f2fd;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .probability-label {
+            font-size: 14px;
+            color: #1976D2;
+            margin-bottom: 5px;
+        }
+
+        .probability-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0D47A1;
+        }
+
+        .reset-button {
+            width: 100%;
+            padding: 12px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .reset-button:hover {
+            background: #545b62;
+        }
+
+        .preview-section {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .values-display {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .values-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .value-item {
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">週間大当り確率</h1>
+        
+        <div class="upload-section">
+            <button class="upload-button" onclick="document.getElementById('imageInput').click()">
+                大当り・総スタート読込
+            </button>
+            <input type="file" id="imageInput" class="file-input" accept="image/*" multiple onchange="handleImageUpload(event)">
+            <div id="uploadStatus" class="status" style="display: none;"></div>
+            
+            <div id="jackpotPreview" class="preview-section">
+                <div style="font-weight: bold; margin-bottom: 10px;">大当り</div>
+            </div>
+            <div id="totalStartPreview" class="preview-section">
+                <div style="font-weight: bold; margin-bottom: 10px;">総スタート</div>
+            </div>
+        </div>
+
+        <div id="resultSection" class="result-section">
+            <div class="result-item">
+                <span class="result-label">大当り合計:</span>
+                <span class="result-value" id="jackpotTotal">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">総スタート合計:</span>
+                <span class="result-value" id="totalStartTotal">-</span>
+            </div>
+            <div class="probability-result">
+                <div class="probability-label">週間大当り確率</div>
+                <div class="probability-value" id="probabilityResult">-</div>
+            </div>
+            <button class="reset-button" onclick="resetAll()">リセット</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+    <script>
+        let jackpotData = null;
+        let totalStartData = null;
+
+        async function handleImageUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            const statusElement = document.getElementById('uploadStatus');
+            statusElement.style.display = 'block';
+            statusElement.className = 'status';
+            statusElement.textContent = '画像を処理中...';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                await processImage(file);
+            }
+
+            statusElement.className = 'status success';
+            statusElement.textContent = '読み込み完了';
+
+            // Check if both images are processed
+            if (jackpotData && totalStartData) {
+                calculateProbability();
+            }
+        }
+
+        async function processImage(file) {
+            const reader = new FileReader();
+            
+            return new Promise((resolve) => {
+                reader.onload = async function(e) {
+                    const imageData = e.target.result;
+                    
+                    try {
+                        // Use Tesseract.js for OCR
+                        const { data: { text } } = await Tesseract.recognize(imageData, 'jpn', {
+                            logger: m => console.log(m)
+                        });
+                        
+                        // Determine image type by looking for keywords
+                        const isJackpot = text.includes('大当り') || text.includes('大当');
+                        const isTotalStart = text.includes('総スタート') || text.includes('総');
+                        
+                        // Extract numbers from the text
+                        const numbers = extractNumbers(text);
+                        
+                        if (isJackpot && numbers.length >= 7) {
+                            jackpotData = numbers.slice(0, 7);
+                            displayPreview('jackpot', imageData, jackpotData);
+                        } else if (isTotalStart && numbers.length >= 7) {
+                            totalStartData = numbers.slice(0, 7);
+                            displayPreview('totalStart', imageData, totalStartData);
+                        } else {
+                            // Fallback: try to determine by number ranges
+                            if (numbers.length >= 7) {
+                                const avg = numbers.reduce((sum, num) => sum + num, 0) / numbers.length;
+                                if (avg < 100) {
+                                    jackpotData = numbers.slice(0, 7);
+                                    displayPreview('jackpot', imageData, jackpotData);
+                                } else {
+                                    totalStartData = numbers.slice(0, 7);
+                                    displayPreview('totalStart', imageData, totalStartData);
+                                }
+                            }
+                        }
+                        
+                        resolve();
+                    } catch (error) {
+                        console.error('OCR error:', error);
+                        resolve();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function extractNumbers(text) {
+            // Extract all numbers from the text
+            const matches = text.match(/\d+/g);
+            if (!matches) return [];
+            
+            return matches.map(match => parseInt(match)).filter(num => num > 0);
+        }
+
+        function displayPreview(type, imageData, numbers) {
+            const previewElement = document.getElementById(`${type}Preview`);
+            previewElement.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 10px;">${type === 'jackpot' ? '大当り' : '総スタート'}</div>
+                <img src="${imageData}" alt="Preview" class="preview-image">
+                <div class="values-display">
+                    <div style="font-weight: bold; margin-bottom: 5px;">認識された数値:</div>
+                    <div class="values-list">${numbers.map(num => 
+                        `<span class="value-item">${num}</span>`
+                    ).join('')}</div>
+                </div>
+            `;
+            previewElement.style.display = 'block';
+        }
+
+        function calculateProbability() {
+            const jackpotSum = jackpotData.reduce((sum, num) => sum + num, 0);
+            const totalStartSum = totalStartData.reduce((sum, num) => sum + num, 0);
+            
+            const ratio = totalStartSum / jackpotSum;
+            const probability = 1 / ratio;
+            
+            // Update display
+            document.getElementById('jackpotTotal').textContent = jackpotSum.toLocaleString();
+            document.getElementById('totalStartTotal').textContent = totalStartSum.toLocaleString();
+            document.getElementById('probabilityResult').textContent = `1/${ratio.toFixed(1)}`;
+            
+            // Show result section
+            document.getElementById('resultSection').style.display = 'block';
+        }
+
+        function resetAll() {
+            jackpotData = null;
+            totalStartData = null;
+            
+            // Reset file inputs
+            document.getElementById('imageInput').value = '';
+            
+            // Hide status and preview elements
+            document.getElementById('uploadStatus').style.display = 'none';
+            document.getElementById('jackpotPreview').style.display = 'none';
+            document.getElementById('totalStartPreview').style.display = 'none';
+            
+            // Hide result section
+            document.getElementById('resultSection').style.display = 'none';
+        }
+
+        // For demonstration purposes, add manual input option
+        function showManualInput() {
+            const jackpotInput = prompt('大当り数値を入力してください（カンマ区切り）:', '28,78,58,2,60,41,19');
+            const totalStartInput = prompt('総スタート数値を入力してください（カンマ区切り）:', '581,1627,1321,80,1331,1176,438');
+            
+            if (jackpotInput && totalStartInput) {
+                jackpotData = jackpotInput.split(',').map(num => parseInt(num.trim()));
+                totalStartData = totalStartInput.split(',').map(num => parseInt(num.trim()));
+                
+                calculateProbability();
+            }
+        }
+
+        // Add double-tap to title for manual input (for testing)
+        let tapCount = 0;
+        document.querySelector('.title').addEventListener('click', function() {
+            tapCount++;
+            if (tapCount === 2) {
+                showManualInput();
+                tapCount = 0;
+            }
+            setTimeout(() => tapCount = 0, 500);
+        });
+    </script>
+</body>
+</html>
