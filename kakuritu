@@ -223,10 +223,29 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
     <script>
         let jackpotData = null;
         let totalStartData = null;
+        let tesseractLoaded = false;
+
+        // Load Tesseract.js dynamically
+        function loadTesseract() {
+            return new Promise((resolve, reject) => {
+                if (tesseractLoaded) {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js';
+                script.onload = () => {
+                    tesseractLoaded = true;
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
 
         async function handleImageUpload(event) {
             const files = event.target.files;
@@ -235,19 +254,30 @@
             const statusElement = document.getElementById('uploadStatus');
             statusElement.style.display = 'block';
             statusElement.className = 'status';
-            statusElement.textContent = '画像を処理中...';
+            statusElement.textContent = 'OCRライブラリを読み込み中...';
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                await processImage(file);
-            }
+            try {
+                // Load Tesseract.js if not already loaded
+                await loadTesseract();
+                
+                statusElement.textContent = '画像を処理中...';
 
-            statusElement.className = 'status success';
-            statusElement.textContent = '読み込み完了';
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    await processImage(file);
+                }
 
-            // Check if both images are processed
-            if (jackpotData && totalStartData) {
-                calculateProbability();
+                statusElement.className = 'status success';
+                statusElement.textContent = '読み込み完了';
+
+                // Check if both images are processed
+                if (jackpotData && totalStartData) {
+                    calculateProbability();
+                }
+            } catch (error) {
+                console.error('Error loading OCR:', error);
+                statusElement.className = 'status error';
+                statusElement.textContent = 'OCRライブラリの読み込みに失敗しました';
             }
         }
 
@@ -259,6 +289,11 @@
                     const imageData = e.target.result;
                     
                     try {
+                        // Check if Tesseract is available
+                        if (typeof Tesseract === 'undefined') {
+                            throw new Error('Tesseract not loaded');
+                        }
+                        
                         // Use Tesseract.js for OCR
                         const { data: { text } } = await Tesseract.recognize(imageData, 'jpn', {
                             logger: m => console.log(m)
@@ -294,6 +329,10 @@
                         resolve();
                     } catch (error) {
                         console.error('OCR error:', error);
+                        // Fallback to manual input or show error
+                        const statusElement = document.getElementById('uploadStatus');
+                        statusElement.className = 'status error';
+                        statusElement.textContent = 'OCR処理に失敗しました。タイトルを2回タップして手動入力してください。';
                         resolve();
                     }
                 };
