@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週間大当り確率</title>
+    <link rel="stylesheet" href="pachi-calc.css"> 
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+</head>
+<body>
+    <div class="container">
+        <h2>週間大当り確率</h2>
+
+        <label for="image-upload" class="upload-btn">
+            大当り・総スタート読込
+        </label>
+        <input type="file" id="image-upload" accept="image/*" multiple style="display: none;">
+
+        <div id="status">画像2枚を選択してください</div>
+
+        <div id="results" class="hidden">
+            <h3>計算結果</h3>
+            <p>大当り合計: <span id="total-wins"></span></p>
+            <p>総スタート合計: <span id="total-starts"></span></p>
+            <p class="final-result">週間大当り確率: <span id="probability"></span></p>
+        </div>
+    </div>
+
+    <script src="pachi-calc.js"></script> 
+</body>
+</html>
