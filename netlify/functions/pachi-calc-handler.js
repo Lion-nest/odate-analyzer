@@ -1,50 +1,68 @@
-// Google Cloud Visionクライアントライブラリをインポート
 const vision = require('@google-cloud/vision');
 
-// クライアントを初期化します。
-// Netlifyの環境変数に設定されたGoogleの認証情報が自動で使われます。
-const client = new vision.ImageAnnotatorClient();
+// ★★★ ここから修正 ★★★
+// 環境変数からJSON形式の認証情報を読み込む
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
 
-// テキストから数値を合計するヘルパー関数
-const sumNumbersFromText = (text) => {
-  if (!text) return 0;
+// 読み込んだ認証情報を使って、Vision APIクライアントを初期化
+const client = new vision.ImageAnnotatorClient({ credentials });
+// ★★★ ここまで修正 ★★★
 
-  // テキストを行に分割
+
+// テキストから日付と数値を抽出し、合計と詳細を返す関数
+const parseVisionText = (text) => {
+  // ... (これ以降のコードは前回のものと全く同じです) ...
+  const results = {
+    total: 0,
+    details: []
+  };
+  if (!text) return results;
+
   const lines = text.split('\n');
-  let total = 0;
+  const dayMap = new Map(); // 重複した日付を避けるため
 
-  // 「本日」または「日前」で終わり、末尾に数字がある行を抽出
-  const relevantLines = lines.filter(line => (line.includes('本日') || line.includes('日前')) && /\d+$/.test(line.trim()));
-
-  if (relevantLines.length >= 7) {
-    // 7日間データが正しく認識できた場合
-    total = relevantLines
-      .map(line => parseInt(line.match(/(\d+)$/)[0], 10))
-      .reduce((a, b) => a + b, 0);
-  } else {
-    // うまく認識できなかった場合のフォールバック
-    const numbers = text.match(/\d+/g) || [];
-    total = numbers
-      .map(num => parseInt(num, 10))
-      .filter(num => num > 0 && num < 5000) // 0や極端に大きな値（日付やバッテリー等）を除外
-      .reduce((a, b) => a + b, 0);
+  for (const line of lines) {
+    const match = line.match(/(本日|(\d+)日前)\s*(\d+)/);
+    if (match) {
+      const day = match[1];
+      const value = parseInt(match[3], 10);
+      if (!dayMap.has(day)) { // まだ登録されていない日付なら追加
+        dayMap.set(day, value);
+      }
+    }
   }
-  return total;
+
+  // 順番を整える（本日, 1日前, 2日前...）
+  const sortedDays = ['本日', '1日前', '2日前', '3日前', '4日前', '5日前', '6日前'];
+  for (const day of sortedDays) {
+    if (dayMap.has(day)) {
+      const value = dayMap.get(day);
+      results.details.push({ day, value });
+      results.total += value;
+    }
+  }
+  
+  // もし正規表現で1件もマッチしなかった場合のフォールバック
+  if (results.total === 0) {
+      const numbers = text.match(/\d+/g) || [];
+      results.total = numbers
+        .map(num => parseInt(num, 10))
+        .filter(num => num > 0 && num < 5000)
+        .reduce((a, b) => a + b, 0);
+      results.details.push({ day: "フォールバック合計", value: results.total });
+  }
+
+  return results;
 };
 
-
-// Netlify Functionのメイン処理
 exports.handler = async (event) => {
-  // POSTリクエスト以外は弾く
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
-    // フロントエンドから送られてきた画像データ（Base64）を取得
     const { image1, image2 } = JSON.parse(event.body);
 
-    // 2枚の画像を並行してVision APIで解析
     const [responses1, responses2] = await Promise.all([
       client.textDetection({ image: { content: image1.split(',')[1] } }),
       client.textDetection({ image: { content: image2.split(',')[1] } })
@@ -52,23 +70,20 @@ exports.handler = async (event) => {
 
     const text1 = responses1[0].fullTextAnnotation?.text;
     const text2 = responses2[0].fullTextAnnotation?.text;
-    
-    let totalWins = 0;
-    let totalStarts = 0;
 
-    // どちらのテキストが「大当り」で「総スタート」かを判定
+    let winsData, startsData;
+
     if (text1 && (text1.includes('大当り') || text1.includes('大当'))) {
-      totalWins = sumNumbersFromText(text1);
-      totalStarts = sumNumbersFromText(text2);
+      winsData = parseVisionText(text1);
+      startsData = parseVisionText(text2);
     } else {
-      totalWins = sumNumbersFromText(text2);
-      totalStarts = sumNumbersFromText(text1);
+      startsData = parseVisionText(text1);
+      winsData = parseVisionText(text2);
     }
-    
-    // 計算結果をJSON形式でフロントエンドに返す
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ totalWins, totalStarts }),
+      body: JSON.stringify({ winsData, startsData }),
     };
 
   } catch (error) {
